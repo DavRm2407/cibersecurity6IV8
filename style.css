@@ -1,0 +1,29 @@
+body {
+    background: linear-gradient(to right, #d291bc, #957dad);
+    font-family: Arial, sans-serif;
+    text-align: center;
+    color: #5c5c5c;
+    margin: 0;
+    padding: 0;
+}
+.container {
+    padding: 50px;
+}
+.buttons {
+    margin-top: 20px;
+}
+.btn {
+    display: inline-block;
+    padding: 15px 25px;
+    margin: 10px;
+    font-size: 18px;
+    color: white;
+    background: linear-gradient(to right, #c08497, #b392ac);
+    text-decoration: none;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+}
+.btn:hover {
+    background: linear-gradient(to right, #b392ac, #c08497);
+    transform: scale(1.1);
+}
