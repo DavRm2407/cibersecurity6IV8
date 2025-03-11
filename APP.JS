@@ -4,17 +4,12 @@ var bodyParser=require('body-parser');
 //var app=express();
 const cors = require("cors");
 const xss = require("xss");
-const PORT = process.env.PORT || 3000;
-
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/Examen1/Crud.html');
-});
 
 // Conexión a MySQL
 var con = mysql.createConnection({
@@ -86,4 +81,3 @@ app.post("/eliminarCantante", (req, res) => {
 app.listen(3000, () => {
     console.log("Servidor corriendo en http://localhost:3000");
 });
-

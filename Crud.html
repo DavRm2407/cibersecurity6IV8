@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Exámen 1</title>
+    <link href="estilo.css" rel="stylesheet">
+    <script src="APP.JS"></script>
+</head>
+<body>
+    <h1>CRUD de Cantantes</h1>
+    <form id="formAgregar">
+        <input type="text" id="nombre" placeholder="Nombre" required>
+        <input type="text" id="nombre_artistico" placeholder="Nombre Artístico" required>
+        <input type="text" id="genero" placeholder="Género Musical" required>
+        <input type="text" id="pais" placeholder="País" required>
+        <input type="number" id="edad" placeholder="Edad" required>
+        <input type="number" id="anos_carrera" placeholder="Años de carrera" required>
+        <button type="submit">Agregar Cantante</button>
+    </form>
+
+    <h2>Lista de Cantantes</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="tablaCantantes"></tbody>
+    </table>
+
+    <script src="escript.js"></script>
+</body>
+</html>
