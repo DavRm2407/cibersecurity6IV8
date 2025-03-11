@@ -1,12 +1,10 @@
 const express = require("express");
 const mysql = require("mysql2");
 var bodyParser=require('body-parser');
-//var app=express();
 const cors = require("cors");
 const path = require('path');
 const xss = require("xss");
 const PORT = process.env.PORT || 3000;
-
 
 const app = express();
 app.use(cors());
@@ -16,9 +14,6 @@ app.use(express.static(path.join(__dirname, 'Examen1')));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'Examen1', 'Crud.html'));
 });
-
-
-
 
 var con = mysql.createConnection({
     host: "localhost",
@@ -36,8 +31,7 @@ con.connect(err => {
 });
 
 
-const limpiarTexto = texto => xss(texto).trim().substring(0, 255);
-
+const limpiarTexto = (texto) => xss(texto).replace(/<[^>]*>?/g, '').trim().substring(0, 255);
 
 app.get("/obtenerCantantes", (req, res) => {
     con.query("SELECT * FROM cantantes", (err, results) => {
@@ -45,7 +39,6 @@ app.get("/obtenerCantantes", (req, res) => {
         res.json(results);
     });
 });
-
 
 app.post("/agregarCantante", (req, res) => {
     let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
@@ -63,7 +56,6 @@ app.post("/agregarCantante", (req, res) => {
     });
 });
 
-
 app.post("/actualizarCantante", (req, res) => {
     let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
 
@@ -76,7 +68,6 @@ app.post("/actualizarCantante", (req, res) => {
     });
 });
 
-
 app.post("/eliminarCantante", (req, res) => {
     let { id } = req.body;
     con.query("DELETE FROM cantantes WHERE id=?", [id], (err) => {
@@ -85,8 +76,6 @@ app.post("/eliminarCantante", (req, res) => {
     });
 });
 
-
 app.listen(3000, () => {
-    console.log("Servidor corriendo 3000");
+    console.log("Servidor corriendo in the port: 3000");
 });
-

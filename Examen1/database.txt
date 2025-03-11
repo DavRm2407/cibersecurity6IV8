@@ -1,7 +1,7 @@
 n0m3l0
 
 Create database cantantes_db;
-use database cantantes_db;
+use cantantes_db;
 create table cantantes (
 id INT AUTO_INCREMENT PRIMARY KEY,
 nombre VARCHAR(100) NOT NULL,
