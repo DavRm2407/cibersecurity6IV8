@@ -17,5 +17,14 @@
   },
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavRm2407/cibersecurity6IV8.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DavRm2407/cibersecurity6IV8/issues"
+  },
+  "homepage": "https://github.com/DavRm2407/cibersecurity6IV8#readme"
 }
