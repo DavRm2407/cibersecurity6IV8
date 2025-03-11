@@ -13,10 +13,12 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/Examen1/Crud.html');
+    res.sendFile(__dirname + '/Crud.html');
 });
 
-// Conexión a MySQL
+
+
+
 var con = mysql.createConnection({
     host: "localhost",
     user: "root",
@@ -32,10 +34,10 @@ con.connect(err => {
     console.log("Conectado a MySQL");
 });
 
-// Función para limpiar datos y evitar etiquetas HTML
+
 const limpiarTexto = texto => xss(texto).trim().substring(0, 255);
 
-// Ruta para obtener todos los cantantes
+
 app.get("/obtenerCantantes", (req, res) => {
     con.query("SELECT * FROM cantantes", (err, results) => {
         if (err) return res.status(500).json({ error: "Error al obtener datos" });
@@ -43,7 +45,7 @@ app.get("/obtenerCantantes", (req, res) => {
     });
 });
 
-// Ruta para agregar un cantante
+
 app.post("/agregarCantante", (req, res) => {
     let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
     
@@ -60,7 +62,7 @@ app.post("/agregarCantante", (req, res) => {
     });
 });
 
-// Ruta para actualizar un cantante
+
 app.post("/actualizarCantante", (req, res) => {
     let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
 
@@ -73,7 +75,7 @@ app.post("/actualizarCantante", (req, res) => {
     });
 });
 
-// Ruta para eliminar un cantante
+
 app.post("/eliminarCantante", (req, res) => {
     let { id } = req.body;
     con.query("DELETE FROM cantantes WHERE id=?", [id], (err) => {
@@ -82,8 +84,8 @@ app.post("/eliminarCantante", (req, res) => {
     });
 });
 
-// Servidor en puerto 8000
+
 app.listen(3000, () => {
-    console.log("Servidor corriendo en http://localhost:3000");
+    console.log("Servidor corriendo 3000");
 });
 

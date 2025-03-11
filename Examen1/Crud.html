@@ -5,32 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Exámen 1</title>
     <link href="estilo.css" rel="stylesheet">
-    <script src="APP.JS"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="escript.js" defer></script>
 </head>
 <body>
     <h1>CRUD de Cantantes</h1>
+
     <form id="formAgregar">
+        <input type="hidden" id="id">
         <input type="text" id="nombre" placeholder="Nombre" required>
         <input type="text" id="nombre_artistico" placeholder="Nombre Artístico" required>
         <input type="text" id="genero" placeholder="Género Musical" required>
         <input type="text" id="pais" placeholder="País" required>
         <input type="number" id="edad" placeholder="Edad" required>
         <input type="number" id="anos_carrera" placeholder="Años de carrera" required>
-        <button type="submit">Agregar Cantante</button>
+        <input type="text" id="discografia" placeholder="Discografía">
+        <input type="text" id="redes_sociales" placeholder="Redes Sociales">
+        <input type="text" id="premios" placeholder="Premios">
+        <input type="text" id="situacion_amorosa" placeholder="Situación Amorosa">
+        <input type="text" id="cancion_favorita" placeholder="Canción Favorita">
+        <button type="submit">Guardar Cantante</button>
     </form>
 
     <h2>Lista de Cantantes</h2>
-    <table>
+    <table border="1">
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Nombre</th>
+                <th>Nombre Artístico</th>
+                <th>Género</th>
+                <th>País</th>
+                <th>Edad</th>
+                <th>Años de carrera</th>
+                <th>Discografía</th>
+                <th>Redes Sociales</th>
+                <th>Premios</th>
+                <th>Situación Amorosa</th>
+                <th>Canción Favorita</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody id="tablaCantantes"></tbody>
     </table>
-
-    <script src="escript.js"></script>
 </body>
 </html>
