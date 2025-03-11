@@ -3,6 +3,7 @@ const mysql = require("mysql2");
 var bodyParser=require('body-parser');
 //var app=express();
 const cors = require("cors");
+const path = require('path');
 const xss = require("xss");
 const PORT = process.env.PORT || 3000;
 
@@ -11,9 +12,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, 'Examen1')));
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/Crud.html');
+    res.sendFile(path.join(__dirname, 'Examen1', 'Crud.html'));
 });
 
 

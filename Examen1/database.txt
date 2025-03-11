@@ -1,0 +1,19 @@
+n0m3l0
+
+Create database cantantes_db;
+use database cantantes_db;
+create table cantantes (
+id INT AUTO_INCREMENT PRIMARY KEY,
+nombre VARCHAR(100) NOT NULL,
+nombre_artistico VARCHAR(100) NOT NULL,
+genero VARCHAR(50) NOT NULL,
+pais VARCHAR(50) NOT NULL,
+ edad INT NOT NULL CHECK (edad > 0),
+anos_carrera INT NOT NULL CHECK (anos_carrera >= 0),
+discografia TEXT,
+redes_sociales TEXT,
+premios TEXT,
+situacion_amorosa VARCHAR(50),
+cancion_favorita VARCHAR(100)
+);
+describe cantantes;
