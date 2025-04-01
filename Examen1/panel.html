@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Usuario</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .panel-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        h1 {
+            margin: 0;
+            color: #333;
+        }
+        .bienvenida {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #e8f5e9;
+            border-radius: 5px;
+        }
+        .info-usuario {
+            margin-bottom: 30px;
+        }
+        .info-usuario p {
+            margin: 5px 0;
+        }
+        .boton-cerrar {
+            background-color: #f44336;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .boton-cerrar:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="panel-container">
+        <header>
+            <h1>Panel de Usuario</h1>
+            <button id="cerrarSesion" class="boton-cerrar">Cerrar Sesión</button>
+        </header>
+        
+        <div class="bienvenida">
+            <h2>Bienvenido, <span id="nombreUsuario">...</span></h2>
+            <p>Has iniciado sesión correctamente.</p>
+        </div>
+        
+        <div class="info-usuario">
+            <h3>Información de tu cuenta</h3>
+            <p><strong>Usuario:</strong> <span id="usuarioNombre">...</span></p>
+            <p><strong>ID:</strong> <span id="usuarioId">...</span></p>
+        </div>
+
+        <div>
+            <h3>Gestión de cantantes</h3>
+            <p>Aquí podrás gestionar la base de datos de cantantes.</p>
+            <!-- Aquí puedes agregar más funcionalidades relacionadas con la gestión de cantantes -->
+        </div>
+    </div>
+
+    <script src="panel.js"></script>
+</body>
+</html>

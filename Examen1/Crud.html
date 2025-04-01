@@ -9,6 +9,21 @@
     <script src="escript.js" defer></script>
 </head>
 <body>
+    <!-- Frame superior para inicio de sesión y registro -->
+    <div class="header-frame">
+        <div class="login-container">
+            <div class="login-options">
+                <a href="Login.html" id="login-link">Iniciar Sesión</a>
+                <span class="separator">|</span>
+                <a href="Registro.html" id="register-link">Registrarse</a>
+            </div>
+            <div class="user-info" style="display: none;">
+                <span>Bienvenido, <span id="username">Usuario</span></span>
+                <a href="" id="logout-link">Cerrar Sesión</a>
+            </div>
+        </div>
+    </div>
+
     <h1>CRUD de Cantantes</h1>
 
     <form id="formAgregar">
