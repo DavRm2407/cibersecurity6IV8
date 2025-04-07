@@ -4,6 +4,8 @@ var bodyParser=require('body-parser');
 const cors = require("cors");
 const path = require('path');
 const xss = require("xss");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -28,11 +30,184 @@ con.connect(err => {
         return;
     }
     console.log("Conectado a MySQL");
+    
+    // Crear tabla de usuarios si no existe
+    const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(50) NOT NULL,
+        apellido VARCHAR(50) NOT NULL,
+        usuario VARCHAR(50) UNIQUE NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        contrasena VARCHAR(100) NOT NULL,
+        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`;
+    
+    con.query(createTableQuery, (err, result) => {
+        if (err) {
+            console.error('Error al crear la tabla usuarios:', err);
+        } else {
+            console.log('Tabla usuarios lista');
+        }
+    });
 });
 
+// Clave secreta para JWT
+const JWT_SECRET = 'clave_secreta_para_jwt_cantantes_app';
+
+// Middleware para verificar token
+function verificarToken(req, res, next) {
+    const token = req.header('x-auth-token');
+    
+    if (!token) {
+        return res.status(401).json({ exito: false, mensaje: 'No hay token, autorización denegada' });
+    }
+    
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.usuario = decoded.usuario;
+        next();
+    } catch (error) {
+        res.status(401).json({ exito: false, mensaje: 'Token no válido' });
+    }
+}
 
 const limpiarTexto = (texto) => xss(texto).replace(/<[^>]*>?/g, '').trim().substring(0, 255);
 
+// Rutas para la autenticación de usuarios
+
+// Registro de usuarios
+app.post('/api/registro', async (req, res) => {
+    const { nombre, apellido, usuario, email, contrasena } = req.body;
+    
+    // Validar campos
+    if (!nombre || !apellido || !usuario || !email || !contrasena) {
+        return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos' });
+    }
+    
+    try {
+        // Verificar si el usuario o email ya existe
+        con.query('SELECT * FROM usuarios WHERE usuario = ? OR email = ?', [usuario, email], async (err, results) => {
+            if (err) {
+                console.error('Error en la consulta:', err);
+                return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+            }
+            
+            if (results.length > 0) {
+                return res.status(400).json({ exito: false, mensaje: 'El usuario o email ya está registrado' });
+            }
+            
+            // Encriptar contraseña
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(contrasena, salt);
+            
+            // Insertar usuario en la base de datos
+            const insertQuery = 'INSERT INTO usuarios (nombre, apellido, usuario, email, contrasena) VALUES (?, ?, ?, ?, ?)';
+            con.query(insertQuery, [nombre, apellido, usuario, email, hashedPassword], (err, result) => {
+                if (err) {
+                    console.error('Error al insertar usuario:', err);
+                    return res.status(500).json({ exito: false, mensaje: 'Error al registrar usuario' });
+                }
+                
+                res.json({ exito: true, mensaje: 'Usuario registrado con éxito' });
+            });
+        });
+    } catch (error) {
+        console.error('Error en el registro:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+    }
+});
+
+// Login de usuarios
+app.post('/api/login', (req, res) => {
+    const { usuarioEmail, contrasena } = req.body;
+    
+    // Validar campos
+    if (!usuarioEmail || !contrasena) {
+        return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos' });
+    }
+    
+    try {
+        // Buscar usuario por usuario o email
+        const query = 'SELECT * FROM usuarios WHERE usuario = ? OR email = ?';
+        con.query(query, [usuarioEmail, usuarioEmail], async (err, results) => {
+            if (err) {
+                console.error('Error en la consulta:', err);
+                return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+            }
+            
+            if (results.length === 0) {
+                return res.status(400).json({ exito: false, mensaje: 'Credenciales inválidas' });
+            }
+            
+            const usuario = results[0];
+            
+            // Verificar contraseña
+            const isMatch = await bcrypt.compare(contrasena, usuario.contrasena);
+            if (!isMatch) {
+                return res.status(400).json({ exito: false, mensaje: 'Credenciales inválidas' });
+            }
+            
+            // Crear y firmar el JWT
+            const payload = {
+                usuario: {
+                    id: usuario.id,
+                    nombre: usuario.nombre,
+                    usuario: usuario.usuario
+                }
+            };
+            
+            jwt.sign(
+                payload,
+                JWT_SECRET,
+                { expiresIn: '1h' },
+                (err, token) => {
+                    if (err) throw err;
+                    res.json({
+                        exito: true,
+                        mensaje: 'Inicio de sesión exitoso',
+                        token,
+                        usuario: {
+                            id: usuario.id,
+                            nombre: usuario.nombre,
+                            usuario: usuario.usuario
+                        }
+                    });
+                }
+            );
+        });
+    } catch (error) {
+        console.error('Error en el login:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+    }
+});
+
+// Obtener información del usuario autenticado
+app.get('/api/usuario', verificarToken, (req, res) => {
+    try {
+        // Consultar información actualizada del usuario
+        con.query('SELECT id, nombre, apellido, usuario, email FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
+            if (err) {
+                console.error('Error al obtener datos del usuario:', err);
+                return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+            }
+            
+            if (results.length === 0) {
+                return res.status(404).json({ exito: false, mensaje: 'Usuario no encontrado' });
+            }
+            
+            res.json({
+                exito: true,
+                usuario: results[0]
+            });
+        });
+    } catch (error) {
+        console.error('Error al obtener usuario:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+    }
+});
+
+// Rutas existentes para cantantes
 app.get("/obtenerCantantes", (req, res) => {
     con.query("SELECT * FROM cantantes", (err, results) => {
         if (err) return res.status(500).json({ error: "Error al obtener datos" });
