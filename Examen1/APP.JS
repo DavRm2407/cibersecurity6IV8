@@ -525,7 +525,7 @@ app.post("/eliminarCantante", verificarToken, (req, res) => {
     let { id } = req.body;
     const usuarioId = req.usuario.id;
     const isAdmin = req.usuario.usuario === 'admin';
-    
+
     // Verificar propiedad o si es admin
     if (isAdmin) {
         // Los administradores pueden eliminar cualquier cantante

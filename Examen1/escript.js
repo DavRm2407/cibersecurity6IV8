@@ -1,6 +1,19 @@
 $(document).ready(() => {
-    // Obtener el token y usuario del localStorage
     const token = localStorage.getItem('token');
+    
+    if (!token) {
+        // Si no hay token, mostrar mensaje y ocultar funcionalidades
+        $("#tablaCantantes").html('<tr><td colspan="13" style="text-align:center">Debes iniciar sesión para ver y gestionar cantantes</td></tr>');
+        $("#formAgregar").hide();
+        // Opcional: redirigir al login
+        // window.location.href = 'Login.html';
+    } else {
+        // Si hay token, cargar cantantes y mostrar funcionalidades
+        cargarCantantes();
+        $("#formAgregar").show();
+    }
+    
+    // Obtener el token y usuario del localStorage
     const usuarioJSON = localStorage.getItem('usuario');
     
     // Mostrar información del usuario si está autenticado
@@ -40,17 +53,51 @@ $(document).ready(() => {
         // El resto del código para agregar/editar cantantes...
     });
     
-    // También actualizar las funciones de eliminar y editar
-    window.eliminarCantante = function (id) {
-        if (!verificarAutenticacion()) return;
-        
+    
+  /*  window.eliminarCantante = function (id) {
         if (confirm("¿Seguro que quieres eliminar este cantante?")) {
-            // Código para eliminar...
+            $.post("http://localhost:3000/eliminarCantante", { id: id }, function () {
+                cargarCantantes();
+            });
         }
     };
-    
-    // Resto del código...
-});
+*/
+    // También actualizar las funciones de eliminar y editar
+    window.eliminarCantante = function (id) {
+        // Verificar si existe un token de autenticación
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            alert("Debes iniciar sesión para eliminar cantantes");
+            window.location.href = 'Login.html';
+            return;
+        }
+        
+        if (confirm("¿Seguro que quieres eliminar este cantante?")) {
+            $.ajax({
+                url: "http://localhost:3000/eliminarCantante",
+                type: "POST",
+                headers: {
+                    'x-auth-token': token
+                },
+                data: { id: id },
+                success: function(response) {
+                    alert("Cantante eliminado correctamente");
+                    cargarCantantes();
+                },
+                error: function(err) {
+                    if (err.status === 401) {
+                        alert("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.");
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('usuario');
+                        window.location.href = 'Login.html';
+                    } else {
+                        alert("Error al eliminar cantante: " + (err.responseJSON?.error || err.statusText));
+                    }
+                }
+            });
+        }
+    };
 $(document).ready(() => {
     // Obtener el token del localStorage
     const token = localStorage.getItem('token');
@@ -110,21 +157,7 @@ $(document).ready(() => {
     });
 
     // También actualiza la función eliminarCantante de manera similar
-    window.eliminarCantante = function (id) {
-        if (confirm("¿Seguro que quieres eliminar este cantante?")) {
-            $.ajax({
-                url: "http://localhost:3000/eliminarCantante",
-                type: "POST",
-                headers: {
-                    'x-auth-token': token
-                },
-                data: { id: id },
-                success: function() {
-                    cargarCantantes();
-                }
-            });
-        }
-    };
+  
     
 });
 function cargarCantantes() {
@@ -304,14 +337,6 @@ function cargarCantantes() {
         }
     });
 
-    window.eliminarCantante = function (id) {
-        if (confirm("¿Seguro que quieres eliminar este cantante?")) {
-            $.post("http://localhost:3000/eliminarCantante", { id: id }, function () {
-                cargarCantantes();
-            });
-        }
-    };
-
     window.cargarFormulario = function (id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita) {
         $("#id").val(id);
         $("#nombre").val(nombre);
@@ -345,4 +370,4 @@ function cargarCantantes() {
     }
 
     cargarCantantes();
-;
+});
