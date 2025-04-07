@@ -127,8 +127,80 @@ $(document).ready(() => {
     };
     
 });
-$(document).ready(() => {
-    function cargarCantantes() {
+function cargarCantantes() {
+    const token = localStorage.getItem('token');
+    const usuarioJSON = localStorage.getItem('usuario');
+    const usuario = usuarioJSON ? JSON.parse(usuarioJSON) : null;
+    const esAdmin = usuario && usuario.usuario === 'admin';
+    
+    $.ajax({
+        url: "http://localhost:3000/obtenerCantantes",
+        type: "GET",
+        headers: {
+            'x-auth-token': token
+        },
+        success: function(data) {
+            let filas = "";
+            
+            if (data.length === 0) {
+                const mensaje = esAdmin 
+                    ? "No hay cantantes registrados en el sistema."
+                    : "No has agregado ningún cantante aún.";
+                    
+                $("#tablaCantantes").html(`<tr><td colspan="13" style="text-align:center">${mensaje}</td></tr>`);
+                return;
+            }
+            
+            data.forEach(cantante => {
+                filas += `
+                    <tr>
+                        <td>${cantante.id}</td>
+                        <td>${cantante.nombre || ''}</td>
+                        <td>${cantante.nombre_artistico || ''}</td>
+                        <td>${cantante.genero || ''}</td>
+                        <td>${cantante.pais || ''}</td>
+                        <td>${cantante.edad || ''}</td>
+                        <td>${cantante.anos_carrera || ''}</td>
+                        <td>${cantante.discografia || ''}</td>
+                        <td>${cantante.redes_sociales || ''}</td>
+                        <td>${cantante.premios || ''}</td>
+                        <td>${cantante.situacion_amorosa || ''}</td>
+                        <td>${cantante.cancion_favorita || ''}</td>
+                        <td>`;
+                
+                // Si es admin, mostrar el creador del cantante
+                if (esAdmin && cantante.creador) {
+                    filas += `<small>Creado por: ${cantante.creador}</small><br>`;
+                }
+                
+                filas += `
+                            <button onclick="cargarFormulario(
+                                ${cantante.id}, 
+                                '${cantante.nombre?.replace(/'/g, "\\'")}', 
+                                '${cantante.nombre_artistico?.replace(/'/g, "\\'")}', 
+                                '${cantante.genero?.replace(/'/g, "\\'")}', 
+                                '${cantante.pais?.replace(/'/g, "\\'")}', 
+                                ${cantante.edad || 0}, 
+                                ${cantante.anos_carrera || 0},
+                                '${cantante.discografia?.replace(/'/g, "\\'") || ''}',
+                                '${cantante.redes_sociales?.replace(/'/g, "\\'") || ''}',
+                                '${cantante.premios?.replace(/'/g, "\\'") || ''}',
+                                '${cantante.situacion_amorosa?.replace(/'/g, "\\'") || ''}',
+                                '${cantante.cancion_favorita?.replace(/'/g, "\\'") || ''}'
+                            )">✏️ Editar</button>
+                            <button onclick="eliminarCantante(${cantante.id})">🗑️ Eliminar</button>
+                        </td>
+                    </tr>`;
+            });
+            
+            $("#tablaCantantes").html(filas);
+        },
+        error: function(err) {
+            console.error("Error al cargar cantantes:", err);
+            alert("Error al cargar cantantes: " + (err.responseJSON?.error || err.statusText));
+        }
+    });
+}
         $.get("http://localhost:3000/obtenerCantantes", (data) => {
             let filas = "";
             data.forEach(cantante => {
@@ -167,15 +239,16 @@ $(document).ready(() => {
             });
             $("#tablaCantantes").html(filas);
         });
-    }
+    ;
     
     $("#formAgregar").submit(function (e) {
         e.preventDefault();
-
+        const token = localStorage.getItem('token');
+        
         function limpiarTexto(texto) {
             return texto.replace(/<[^>]*>?/g, '').trim(); 
         }
-
+    
         let datos = { 
             id: $("#id").val(),
             nombre: limpiarTexto($("#nombre").val()),
@@ -190,17 +263,43 @@ $(document).ready(() => {
             situacion_amorosa: limpiarTexto($("#situacion_amorosa").val()),
             cancion_favorita: limpiarTexto($("#cancion_favorita").val())
         };
-
+    
         if (datos.id) {
-            $.post("http://localhost:3000/actualizarCantante", datos, function () {
-                cargarCantantes();
-                $("#formAgregar")[0].reset();
-                $("#id").val("");
+            $.ajax({
+                url: "http://localhost:3000/actualizarCantante",
+                type: "POST",
+                headers: {
+                    'x-auth-token': token
+                },
+                data: datos,
+                success: function(response) {
+                    console.log("Cantante actualizado:", response);
+                    cargarCantantes();
+                    $("#formAgregar")[0].reset();
+                    $("#id").val("");
+                },
+                error: function(err) {
+                    console.error("Error al actualizar cantante:", err);
+                    alert("Error al actualizar cantante: " + (err.responseJSON?.error || err.statusText));
+                }
             });
         } else {
-            $.post("http://localhost:3000/agregarCantante", datos, function () {
-                cargarCantantes();
-                $("#formAgregar")[0].reset();
+            $.ajax({
+                url: "http://localhost:3000/agregarCantante",
+                type: "POST",
+                headers: {
+                    'x-auth-token': token
+                },
+                data: datos,
+                success: function(response) {
+                    console.log("Cantante agregado:", response);
+                    cargarCantantes();
+                    $("#formAgregar")[0].reset();
+                },
+                error: function(err) {
+                    console.error("Error al agregar cantante:", err);
+                    alert("Error al agregar cantante: " + (err.responseJSON?.error || err.statusText));
+                }
             });
         }
     });
@@ -228,5 +327,22 @@ $(document).ready(() => {
         $("#cancion_favorita").val(cancion_favorita);
     };
 
+    function cargarCantantes() {
+        const token = localStorage.getItem('token');
+        $.ajax({
+            url: "http://localhost:3000/obtenerCantantes",
+            type: "GET",
+            headers: {
+                'x-auth-token': token
+            },
+            success: function(data) {
+                // Your existing code
+            },
+            error: function(err) {
+                console.error("Error al cargar cantantes:", err);
+            }
+        });
+    }
+
     cargarCantantes();
-});
+;
