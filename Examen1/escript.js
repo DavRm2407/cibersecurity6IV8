@@ -2,28 +2,21 @@ $(document).ready(() => {
     const token = localStorage.getItem('token');
     
     if (!token) {
-        // Si no hay token, mostrar mensaje y ocultar funcionalidades
         $("#tablaCantantes").html('<tr><td colspan="13" style="text-align:center">Debes iniciar sesión para ver y gestionar cantantes</td></tr>');
         $("#formAgregar").hide();
-        // Opcional: redirigir al login
-        // window.location.href = 'Login.html';
     } else {
-        // Si hay token, cargar cantantes y mostrar funcionalidades
         cargarCantantes();
         $("#formAgregar").show();
     }
     
-    // Obtener el token y usuario del localStorage
     const usuarioJSON = localStorage.getItem('usuario');
     
-    // Mostrar información del usuario si está autenticado
     if (token && usuarioJSON) {
         const usuario = JSON.parse(usuarioJSON);
         $('.login-options').hide();
         $('.user-info').show();
         $('#username').text(usuario.nombre || usuario.usuario);
         
-        // Actualizar el link de logout
         $('#logout-link').click(function(e) {
             e.preventDefault();
             localStorage.removeItem('token');
@@ -32,9 +25,7 @@ $(document).ready(() => {
         });
     }
     
-    // Resto del código...
     
-    // Función para verificar autenticación antes de realizar operaciones CRUD
     function verificarAutenticacion() {
         if (!token) {
             alert('Debe iniciar sesión para realizar esta acción');
@@ -44,27 +35,14 @@ $(document).ready(() => {
         return true;
     }
     
-    // Modificar submit del formulario para verificar autenticación
     $("#formAgregar").submit(function (e) {
         e.preventDefault();
         
         if (!verificarAutenticacion()) return;
         
-        // El resto del código para agregar/editar cantantes...
     });
     
-    
-  /*  window.eliminarCantante = function (id) {
-        if (confirm("¿Seguro que quieres eliminar este cantante?")) {
-            $.post("http://localhost:3000/eliminarCantante", { id: id }, function () {
-                cargarCantantes();
-            });
-        }
-    };
-*/
-    // También actualizar las funciones de eliminar y editar
     window.eliminarCantante = function (id) {
-        // Verificar si existe un token de autenticación
         const token = localStorage.getItem('token');
         
         if (!token) {
@@ -99,7 +77,6 @@ $(document).ready(() => {
         }
     };
 $(document).ready(() => {
-    // Obtener el token del localStorage
     const token = localStorage.getItem('token');
     
     function cargarCantantes() {
@@ -112,8 +89,6 @@ $(document).ready(() => {
             success: function(data) {
                 let filas = "";
                 data.forEach(cantante => {
-                    // El código existente para mostrar cantantes
-                    // ...
                 });
                 $("#tablaCantantes").html(filas);
             }
@@ -122,10 +97,7 @@ $(document).ready(() => {
     
     $("#formAgregar").submit(function (e) {
         e.preventDefault();
-        
-        // El resto del código para agregar/editar cantantes
-        // ...
-        
+            
         if (datos.id) {
             $.ajax({
                 url: "http://localhost:3000/actualizarCantante",
@@ -155,8 +127,6 @@ $(document).ready(() => {
             });
         }
     });
-
-    // También actualiza la función eliminarCantante de manera similar
   
     
 });
@@ -201,7 +171,6 @@ function cargarCantantes() {
                         <td>${cantante.cancion_favorita || ''}</td>
                         <td>`;
                 
-                // Si es admin, mostrar el creador del cantante
                 if (esAdmin && cantante.creador) {
                     filas += `<small>Creado por: ${cantante.creador}</small><br>`;
                 }
@@ -361,7 +330,6 @@ function cargarCantantes() {
                 'x-auth-token': token
             },
             success: function(data) {
-                // Your existing code
             },
             error: function(err) {
                 console.error("Error al cargar cantantes:", err);

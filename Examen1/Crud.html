@@ -3,7 +3,6 @@
 <head>
     <script>
 
-    // Archivo: redirect.js (incluir en página de inicio)
     document.addEventListener('DOMContentLoaded', function() {
         const token = localStorage.getItem('token');
         const usuarioJSON = localStorage.getItem('usuario');
@@ -11,12 +10,9 @@
         if (token && usuarioJSON) {
             const usuario = JSON.parse(usuarioJSON);
             
-            // Solo redirigir si estamos en la página inicial o login
-            // No redirigir si ya estamos en la página correcta
             const currentPage = window.location.pathname.split('/').pop();
             
             if (currentPage === '' || currentPage === 'index.html' || currentPage === 'Login.html') {
-                // Redirigir según tipo de usuario
                 if (usuario.usuario === 'admin') {
                     window.location.href = 'panel.html';
                 } else {
@@ -24,7 +20,6 @@
                 }
             }
         }
-        // Si no hay token, se queda en la página actual
     });
     </script>
     <meta charset="UTF-8">
