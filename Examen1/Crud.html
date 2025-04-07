@@ -1,6 +1,25 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <script>
+        // Archivo: redirect.js (incluir en página de inicio)
+document.addEventListener('DOMContentLoaded', function() {
+    const token = localStorage.getItem('token');
+    const usuarioJSON = localStorage.getItem('usuario');
+    
+    if (token && usuarioJSON) {
+        const usuario = JSON.parse(usuarioJSON);
+        
+        // Redirigir según tipo de usuario
+        if (usuario.usuario === 'admin') {
+            window.location.href = 'panel.html';
+        } else {
+            window.location.href = 'Crud.html';
+        }
+    }
+    // Si no hay token, se queda en la página actual
+});
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Exámen 1</title>

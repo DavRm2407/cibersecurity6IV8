@@ -71,3 +71,40 @@ document.addEventListener('DOMContentLoaded', function() {
         mensajeDiv.scrollIntoView({ behavior: 'smooth' });
     }
 });
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Obtener datos del formulario
+    const usuarioEmail = document.getElementById('usuarioEmail').value;
+    const contrasena = document.getElementById('contrasena').value;
+    
+    // Enviar solicitud de login
+    fetch('http://localhost:3000/api/login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ usuarioEmail, contrasena })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.exito) {
+            // Guardar token y datos de usuario en localStorage
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            
+            // Redirigir según el tipo de usuario
+            if (data.usuario.usuario === 'admin') {
+                window.location.href = 'panel.html'; // Admin va al panel
+            } else {
+                window.location.href = 'Crud.html'; // Usuario normal va a la página de CRUD
+            }
+        } else {
+            alert('Error: ' + data.mensaje);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al iniciar sesión');
+    });
+});

@@ -251,6 +251,75 @@ app.post("/eliminarCantante", (req, res) => {
     });
 });
 
+function esAdmin(req, res, next) {
+    // Verificar si el usuario es admin
+    con.query('SELECT usuario FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
+        if (err || results.length === 0) {
+            return res.status(403).json({ exito: false, mensaje: 'Acceso denegado' });
+        }
+        
+        if (results[0].usuario === 'admin') {
+            next(); // Es administrador, permitir acceso
+        } else {
+            return res.status(403).json({ exito: false, mensaje: 'Se requiere permisos de administrador' });
+        }
+    });
+}
+
+// Modifica las rutas de cantantes para usar los middlewares
+app.get("/obtenerCantantes", verificarToken, (req, res) => {
+    con.query("SELECT * FROM cantantes", (err, results) => {
+        if (err) return res.status(500).json({ error: "Error al obtener datos" });
+        res.json(results);
+    });
+});
+
+app.post("/agregarCantante", verificarToken, esAdmin, (req, res) => {
+    // El código existente...
+});
+
+app.post("/actualizarCantante", verificarToken, esAdmin, (req, res) => {
+    // El código existente...
+});
+
+app.post("/eliminarCantante", verificarToken, esAdmin, (req, res) => {
+    // El código existente...
+});
+
+// Middleware para rutas que requieren ser administrador
+function verificarAdmin(req, res, next) {
+    con.query('SELECT usuario FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
+        if (err || results.length === 0) {
+            return res.status(403).json({ exito: false, mensaje: 'Acceso denegado' });
+        }
+        
+        if (results[0].usuario === 'admin') {
+            next(); // Es administrador, permitir acceso
+        } else {
+            return res.status(403).json({ exito: false, mensaje: 'Se requiere permisos de administrador' });
+        }
+    });
+}
+
+// Rutas que solo administradores pueden usar
+app.get("/cantantesAdmin", verificarToken, verificarAdmin, (req, res) => {
+    // Operaciones administrativas
+});
+
+// Rutas que cualquier usuario autenticado puede usar
+app.get("/obtenerCantantes", verificarToken, (req, res) => {
+    // Cualquier usuario autenticado puede ver cantantes
+});
+
+app.post("/agregarCantante", verificarToken, (req, res) => {
+    // Cualquier usuario autenticado puede agregar cantantes
+});
+
+// Si quieres que solo administradores puedan eliminar o actualizar:
+app.post("/eliminarCantante", verificarToken, verificarAdmin, (req, res) => {
+    // Solo administradores pueden eliminar
+});
+
 app.listen(3000, () => {
     console.log("Servidor corriendo in the port: 3000");
 });

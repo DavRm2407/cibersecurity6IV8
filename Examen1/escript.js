@@ -1,4 +1,133 @@
 $(document).ready(() => {
+    // Obtener el token y usuario del localStorage
+    const token = localStorage.getItem('token');
+    const usuarioJSON = localStorage.getItem('usuario');
+    
+    // Mostrar información del usuario si está autenticado
+    if (token && usuarioJSON) {
+        const usuario = JSON.parse(usuarioJSON);
+        $('.login-options').hide();
+        $('.user-info').show();
+        $('#username').text(usuario.nombre || usuario.usuario);
+        
+        // Actualizar el link de logout
+        $('#logout-link').click(function(e) {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('usuario');
+            window.location.reload();
+        });
+    }
+    
+    // Resto del código...
+    
+    // Función para verificar autenticación antes de realizar operaciones CRUD
+    function verificarAutenticacion() {
+        if (!token) {
+            alert('Debe iniciar sesión para realizar esta acción');
+            window.location.href = 'Login.html';
+            return false;
+        }
+        return true;
+    }
+    
+    // Modificar submit del formulario para verificar autenticación
+    $("#formAgregar").submit(function (e) {
+        e.preventDefault();
+        
+        if (!verificarAutenticacion()) return;
+        
+        // El resto del código para agregar/editar cantantes...
+    });
+    
+    // También actualizar las funciones de eliminar y editar
+    window.eliminarCantante = function (id) {
+        if (!verificarAutenticacion()) return;
+        
+        if (confirm("¿Seguro que quieres eliminar este cantante?")) {
+            // Código para eliminar...
+        }
+    };
+    
+    // Resto del código...
+});
+$(document).ready(() => {
+    // Obtener el token del localStorage
+    const token = localStorage.getItem('token');
+    
+    function cargarCantantes() {
+        $.ajax({
+            url: "http://localhost:3000/obtenerCantantes",
+            type: "GET",
+            headers: {
+                'x-auth-token': token
+            },
+            success: function(data) {
+                let filas = "";
+                data.forEach(cantante => {
+                    // El código existente para mostrar cantantes
+                    // ...
+                });
+                $("#tablaCantantes").html(filas);
+            }
+        });
+    }
+    
+    $("#formAgregar").submit(function (e) {
+        e.preventDefault();
+        
+        // El resto del código para agregar/editar cantantes
+        // ...
+        
+        if (datos.id) {
+            $.ajax({
+                url: "http://localhost:3000/actualizarCantante",
+                type: "POST",
+                headers: {
+                    'x-auth-token': token
+                },
+                data: datos,
+                success: function() {
+                    cargarCantantes();
+                    $("#formAgregar")[0].reset();
+                    $("#id").val("");
+                }
+            });
+        } else {
+            $.ajax({
+                url: "http://localhost:3000/agregarCantante",
+                type: "POST",
+                headers: {
+                    'x-auth-token': token
+                },
+                data: datos,
+                success: function() {
+                    cargarCantantes();
+                    $("#formAgregar")[0].reset();
+                }
+            });
+        }
+    });
+
+    // También actualiza la función eliminarCantante de manera similar
+    window.eliminarCantante = function (id) {
+        if (confirm("¿Seguro que quieres eliminar este cantante?")) {
+            $.ajax({
+                url: "http://localhost:3000/eliminarCantante",
+                type: "POST",
+                headers: {
+                    'x-auth-token': token
+                },
+                data: { id: id },
+                success: function() {
+                    cargarCantantes();
+                }
+            });
+        }
+    };
+    
+});
+$(document).ready(() => {
     function cargarCantantes() {
         $.get("http://localhost:3000/obtenerCantantes", (data) => {
             let filas = "";
