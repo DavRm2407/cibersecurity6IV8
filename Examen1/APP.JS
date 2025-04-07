@@ -174,7 +174,8 @@ app.post('/api/login', (req, res) => {
                 usuario: {
                     id: usuario.id,
                     nombre: usuario.nombre,
-                    usuario: usuario.usuario
+                    usuario: usuario.usuario,
+                    esAdmin: usuario.usuario === 'admin'
                 }
             };
             
@@ -191,7 +192,8 @@ app.post('/api/login', (req, res) => {
                         usuario: {
                             id: usuario.id,
                             nombre: usuario.nombre,
-                            usuario: usuario.usuario
+                            usuario: usuario.usuario,
+                            esAdmin: usuario.usuario === 'admin'
                         }
                     });
                 }
@@ -202,7 +204,6 @@ app.post('/api/login', (req, res) => {
         res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
     }
 });
-
 // Obtener información del usuario autenticado
 app.get('/api/usuario', verificarToken, (req, res) => {
     try {
@@ -395,9 +396,10 @@ app.post("/eliminarCantante", verificarToken, (req, res) => {
 });
 
 // Obtener cantantes (filtrados por usuario o todos para admin)
+// Obtener cantantes (filtrados por usuario o todos para admin)
 app.get("/obtenerCantantes", verificarToken, (req, res) => {
     const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.usuario === 'admin'; // Asume que esta propiedad está en el token
+    const isAdmin = req.usuario.usuario === 'admin';
 
     // Consulta SQL con condición dependiendo del rol
     const query = isAdmin 
@@ -414,6 +416,22 @@ app.get("/obtenerCantantes", verificarToken, (req, res) => {
         res.json(results);
     });
 });
+
+    // Consulta SQL con condición dependiendo del rol
+    const query = isAdmin 
+        ? "SELECT c.*, u.usuario as creador FROM cantantes c LEFT JOIN usuarios u ON c.usuario_id = u.id" 
+        : "SELECT * FROM cantantes WHERE usuario_id = ?";
+    
+    const params = isAdmin ? [] : [usuarioId];
+    
+    con.query(query, params, (err, results) => {
+        if (err) {
+            console.error("Error al obtener cantantes:", err);
+            return res.status(500).json({ error: "Error al obtener datos" });
+        }
+        res.json(results);
+    });
+;
 
 // Agregar cantante (incluyendo usuario_id)
 app.post("/agregarCantante", verificarToken, (req, res) => {
@@ -535,71 +553,7 @@ app.post("/eliminarCantante", verificarToken, (req, res) => {
     }
 });
 
-// Login de usuarios
-app.post('/api/login', (req, res) => {
-    const { usuarioEmail, contrasena } = req.body;
-    
-    // Validar campos
-    if (!usuarioEmail || !contrasena) {
-        return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos' });
-    }
-    
-    try {
-        // Buscar usuario por usuario o email
-        const query = 'SELECT * FROM usuarios WHERE usuario = ? OR email = ?';
-        con.query(query, [usuarioEmail, usuarioEmail], async (err, results) => {
-            if (err) {
-                console.error('Error en la consulta:', err);
-                return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
-            }
-            
-            if (results.length === 0) {
-                return res.status(400).json({ exito: false, mensaje: 'Credenciales inválidas' });
-            }
-            
-            const usuario = results[0];
-            
-            // Verificar contraseña
-            const isMatch = await bcrypt.compare(contrasena, usuario.contrasena);
-            if (!isMatch) {
-                return res.status(400).json({ exito: false, mensaje: 'Credenciales inválidas' });
-            }
-            
-            // Crear y firmar el JWT
-            const payload = {
-                usuario: {
-                    id: usuario.id,
-                    nombre: usuario.nombre,
-                    usuario: usuario.usuario,
-                    esAdmin: usuario.usuario === 'admin'
-                }
-            };
-            
-            jwt.sign(
-                payload,
-                JWT_SECRET,
-                { expiresIn: '1h' },
-                (err, token) => {
-                    if (err) throw err;
-                    res.json({
-                        exito: true,
-                        mensaje: 'Inicio de sesión exitoso',
-                        token,
-                        usuario: {
-                            id: usuario.id,
-                            nombre: usuario.nombre,
-                            usuario: usuario.usuario,
-                            esAdmin: usuario.usuario === 'admin'
-                        }
-                    });
-                }
-            );
-        });
-    } catch (error) {
-        console.error('Error en el login:', error);
-        res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
-    }
-});
+
 app.listen(3000, () => {
     console.log("Servidor corriendo in the port: 3000");
 });

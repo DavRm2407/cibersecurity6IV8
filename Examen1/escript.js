@@ -131,7 +131,7 @@ function cargarCantantes() {
     const token = localStorage.getItem('token');
     const usuarioJSON = localStorage.getItem('usuario');
     const usuario = usuarioJSON ? JSON.parse(usuarioJSON) : null;
-    const esAdmin = usuario && usuario.usuario === 'admin';
+    const esAdmin = usuario && usuario.esAdmin;
     
     $.ajax({
         url: "http://localhost:3000/obtenerCantantes",
