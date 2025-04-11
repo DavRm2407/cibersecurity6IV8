@@ -8,10 +8,75 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const PORT = process.env.PORT || 3000;
 
-// Función para limpiar texto (estaba siendo usada pero no definida)
+// Función mejorada para limpiar texto y prevenir inyecciones SQL
 function limpiarTexto(texto) {
     if (!texto) return "";
-    return xss(texto.toString().trim());
+    
+    // Primero aplicamos XSS para prevenir ataques XSS
+    let textoLimpio = xss(texto.toString().trim());
+    
+    // Filtrar patrones comunes de inyección SQL
+    textoLimpio = textoLimpio
+        .replace(/'/g, "''") // Escape de comillas simples
+        .replace(/;/g, "") // Eliminar punto y coma
+        .replace(/--/g, "") // Eliminar comentarios SQL
+        .replace(/\/\*/g, "") // Eliminar inicio de comentario multi-línea
+        .replace(/\*\//g, "") // Eliminar fin de comentario multi-línea
+        .replace(/union\s+select/gi, "") // Prevenir UNION SELECT
+        .replace(/select/gi, "") // Filtrar SELECT
+        .replace(/update/gi, "") // Filtrar UPDATE
+        .replace(/delete/gi, "") // Filtrar DELETE
+        .replace(/insert/gi, "") // Filtrar INSERT
+        .replace(/drop/gi, "") // Filtrar DROP
+        .replace(/alter/gi, "") // Filtrar ALTER
+        .replace(/from/gi, "") // Filtrar FROM
+        .replace(/where/gi, ""); // Filtrar WHERE
+    
+    return textoLimpio;
+}
+
+// Función para validar entradas y detectar patrones de inyección SQL
+function validarEntrada(texto) {
+    if (!texto) return true;
+    
+    // Patrones de inyección SQL comunes
+    const patronesPeligrosos = [
+        /'.*OR.*'/i,
+        /'.*=.*'/i,
+        /--/,
+        /;.*/,
+        /\/\*/,
+        /\*\//,
+        /union\s+select/i,
+        /select.*from/i,
+        /delete.*from/i,
+        /insert.*into/i,
+        /drop\s+table/i,
+        /alter\s+table/i
+    ];
+    
+    // Verificar si algún patrón peligroso está presente
+    for (const patron of patronesPeligrosos) {
+        if (patron.test(texto)) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Función para validar múltiples campos a la vez
+function validarCamposMultiples(campos) {
+    for (const [nombre, valor] of Object.entries(campos)) {
+        if (valor && !validarEntrada(valor)) {
+            return {
+                valido: false,
+                mensaje: `Se detectaron caracteres no permitidos en el campo: ${nombre}`
+            };
+        }
+    }
+    
+    return { valido: true };
 }
 
 const app = express();
@@ -149,12 +214,27 @@ function verificarToken(req, res, next) {
 app.post('/api/registro', async (req, res) => {
     const { nombre, apellido, usuario, email, contrasena } = req.body;
     
+    // Validar campos para prevenir inyección SQL
+    const validacion = validarCamposMultiples({
+        nombre, apellido, usuario, email
+    });
+    
+    if (!validacion.valido) {
+        return res.status(400).json({ exito: false, mensaje: validacion.mensaje });
+    }
+    
     if (!nombre || !apellido || !usuario || !email || !contrasena) {
         return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos' });
     }
     
     try {
-        con.query('SELECT * FROM usuarios WHERE usuario = ? OR email = ?', [usuario, email], async (err, results) => {
+        // Limpiar datos de entrada
+        const nombreLimpio = limpiarTexto(nombre);
+        const apellidoLimpio = limpiarTexto(apellido);
+        const usuarioLimpio = limpiarTexto(usuario);
+        const emailLimpio = limpiarTexto(email);
+        
+        con.query('SELECT * FROM usuarios WHERE usuario = ? OR email = ?', [usuarioLimpio, emailLimpio], async (err, results) => {
             if (err) {
                 console.error('Error en la consulta:', err);
                 return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
@@ -168,7 +248,7 @@ app.post('/api/registro', async (req, res) => {
             const hashedPassword = await bcrypt.hash(contrasena, salt);
             
             const insertQuery = 'INSERT INTO usuarios (nombre, apellido, usuario, email, contrasena) VALUES (?, ?, ?, ?, ?)';
-            con.query(insertQuery, [nombre, apellido, usuario, email, hashedPassword], (err, result) => {
+            con.query(insertQuery, [nombreLimpio, apellidoLimpio, usuarioLimpio, emailLimpio, hashedPassword], (err, result) => {
                 if (err) {
                     console.error('Error al insertar usuario:', err);
                     return res.status(500).json({ exito: false, mensaje: 'Error al registrar usuario' });
@@ -186,13 +266,25 @@ app.post('/api/registro', async (req, res) => {
 app.post('/api/login', (req, res) => {
     const { usuarioEmail, contrasena } = req.body;
     
+    // Validar campos para prevenir inyección SQL
+    const validacion = validarCamposMultiples({
+        usuarioEmail
+    });
+    
+    if (!validacion.valido) {
+        return res.status(400).json({ exito: false, mensaje: validacion.mensaje });
+    }
+    
     if (!usuarioEmail || !contrasena) {
         return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos' });
     }
     
     try {
+        // Limpiar datos de entrada
+        const usuarioEmailLimpio = limpiarTexto(usuarioEmail);
+        
         const query = 'SELECT * FROM usuarios WHERE usuario = ? OR email = ?';
-        con.query(query, [usuarioEmail, usuarioEmail], async (err, results) => {
+        con.query(query, [usuarioEmailLimpio, usuarioEmailLimpio], async (err, results) => {
             if (err) {
                 console.error('Error en la consulta:', err);
                 return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
@@ -291,6 +383,15 @@ app.post("/agregarCantante", verificarToken, (req, res) => {
     let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
     const usuarioId = req.usuario.id;
     
+    // Validar campos para prevenir inyección SQL
+    const validacion = validarCamposMultiples({
+        nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita
+    });
+    
+    if (!validacion.valido) {
+        return res.status(400).json({ error: validacion.mensaje });
+    }
+    
     if (!nombre || !nombre_artistico || !genero || !pais || !edad || !anos_carrera) {
         return res.status(400).json({ error: "Todos los campos requeridos deben estar llenos" });
     }
@@ -324,6 +425,15 @@ app.post("/actualizarCantante", verificarToken, (req, res) => {
     let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
     const usuarioId = req.usuario.id;
     const isAdmin = req.usuario.esAdmin;
+    
+    // Validar campos para prevenir inyección SQL
+    const validacion = validarCamposMultiples({
+        nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita
+    });
+    
+    if (!validacion.valido) {
+        return res.status(400).json({ error: validacion.mensaje });
+    }
     
     const checkOwnershipQuery = "SELECT usuario_id FROM cantantes WHERE id = ?";
     
