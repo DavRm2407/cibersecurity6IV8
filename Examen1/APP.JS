@@ -8,38 +8,33 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const PORT = process.env.PORT || 3000;
 
-// Función mejorada para limpiar texto y prevenir inyecciones SQL
 function limpiarTexto(texto) {
     if (!texto) return "";
     
-    // Primero aplicamos XSS para prevenir ataques XSS
     let textoLimpio = xss(texto.toString().trim());
     
-    // Filtrar patrones comunes de inyección SQL
     textoLimpio = textoLimpio
-        .replace(/'/g, "''") // Escape de comillas simples
-        .replace(/;/g, "") // Eliminar punto y coma
-        .replace(/--/g, "") // Eliminar comentarios SQL
-        .replace(/\/\*/g, "") // Eliminar inicio de comentario multi-línea
-        .replace(/\*\//g, "") // Eliminar fin de comentario multi-línea
-        .replace(/union\s+select/gi, "") // Prevenir UNION SELECT
-        .replace(/select/gi, "") // Filtrar SELECT
-        .replace(/update/gi, "") // Filtrar UPDATE
-        .replace(/delete/gi, "") // Filtrar DELETE
-        .replace(/insert/gi, "") // Filtrar INSERT
-        .replace(/drop/gi, "") // Filtrar DROP
-        .replace(/alter/gi, "") // Filtrar ALTER
-        .replace(/from/gi, "") // Filtrar FROM
-        .replace(/where/gi, ""); // Filtrar WHERE
+        .replace(/'/g, "''") 
+        .replace(/;/g, "") 
+        .replace(/--/g, "") 
+        .replace(/\/\*/g, "") 
+        .replace(/\*\//g, "") 
+        .replace(/union\s+select/gi, "") 
+        .replace(/select/gi, "") 
+        .replace(/update/gi, "") 
+        .replace(/delete/gi, "") 
+        .replace(/insert/gi, "")
+        .replace(/drop/gi, "") 
+        .replace(/alter/gi, "") 
+        .replace(/from/gi, "") 
+        .replace(/where/gi, ""); 
     
     return textoLimpio;
 }
 
-// Función para validar entradas y detectar patrones de inyección SQL
 function validarEntrada(texto) {
     if (!texto) return true;
     
-    // Patrones de inyección SQL comunes
     const patronesPeligrosos = [
         /'.*OR.*'/i,
         /'.*=.*'/i,
@@ -55,7 +50,6 @@ function validarEntrada(texto) {
         /alter\s+table/i
     ];
     
-    // Verificar si algún patrón peligroso está presente
     for (const patron of patronesPeligrosos) {
         if (patron.test(texto)) {
             return false;
@@ -65,7 +59,6 @@ function validarEntrada(texto) {
     return true;
 }
 
-// Función para validar múltiples campos a la vez
 function validarCamposMultiples(campos) {
     for (const [nombre, valor] of Object.entries(campos)) {
         if (valor && !validarEntrada(valor)) {
@@ -120,14 +113,12 @@ con.connect(err => {
         } else {
             console.log('Tabla usuarios lista');
             
-            // Primero verificar si la columna usuario_id ya existe en la tabla cantantes
             con.query("SHOW COLUMNS FROM cantantes LIKE 'usuario_id'", (err, result) => {
                 if (err) {
                     console.error('Error al verificar columna usuario_id:', err);
                     return;
                 }
                 
-                // Si la columna no existe, la añadimos
                 if (result.length === 0) {
                     con.query(`
                         ALTER TABLE cantantes 
@@ -137,22 +128,18 @@ con.connect(err => {
                             console.error('Error al añadir columna usuario_id:', err);
                         } else {
                             console.log('Columna usuario_id añadida correctamente');
-                            // Después de añadir la columna, intentamos añadir la restricción
                             addForeignKeyConstraint();
                         }
                     });
                 } else {
                     console.log('La columna usuario_id ya existe');
-                    // Si la columna ya existe, solo añadimos la restricción
                     addForeignKeyConstraint();
                 }
             });
         }
     });
     
-    // Función para añadir la restricción de clave foránea
     function addForeignKeyConstraint() {
-        // Verificar si la restricción ya existe
         con.query(`
             SELECT COUNT(*) AS constraint_exists
             FROM information_schema.TABLE_CONSTRAINTS 
@@ -201,7 +188,6 @@ function verificarToken(req, res, next) {
             }
             
             req.usuario = results[0];
-            // Añadir la propiedad esAdmin al objeto usuario basado en el nombre de usuario
             req.usuario.esAdmin = req.usuario.usuario === 'admin';
             next();
         });
@@ -214,7 +200,6 @@ function verificarToken(req, res, next) {
 app.post('/api/registro', async (req, res) => {
     const { nombre, apellido, usuario, email, contrasena } = req.body;
     
-    // Validar campos para prevenir inyección SQL
     const validacion = validarCamposMultiples({
         nombre, apellido, usuario, email
     });
@@ -228,7 +213,6 @@ app.post('/api/registro', async (req, res) => {
     }
     
     try {
-        // Limpiar datos de entrada
         const nombreLimpio = limpiarTexto(nombre);
         const apellidoLimpio = limpiarTexto(apellido);
         const usuarioLimpio = limpiarTexto(usuario);
@@ -266,7 +250,6 @@ app.post('/api/registro', async (req, res) => {
 app.post('/api/login', (req, res) => {
     const { usuarioEmail, contrasena } = req.body;
     
-    // Validar campos para prevenir inyección SQL
     const validacion = validarCamposMultiples({
         usuarioEmail
     });
@@ -280,7 +263,6 @@ app.post('/api/login', (req, res) => {
     }
     
     try {
-        // Limpiar datos de entrada
         const usuarioEmailLimpio = limpiarTexto(usuarioEmail);
         
         const query = 'SELECT * FROM usuarios WHERE usuario = ? OR email = ?';
@@ -359,7 +341,6 @@ app.get('/api/usuario', verificarToken, (req, res) => {
     }
 });
 
-// Eliminar rutas duplicadas y dejar solo una versión de cada endpoint
 app.get("/obtenerCantantes", verificarToken, (req, res) => {
     const usuarioId = req.usuario.id;
     const isAdmin = req.usuario.esAdmin;
@@ -383,7 +364,6 @@ app.post("/agregarCantante", verificarToken, (req, res) => {
     let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
     const usuarioId = req.usuario.id;
     
-    // Validar campos para prevenir inyección SQL
     const validacion = validarCamposMultiples({
         nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita
     });
@@ -426,7 +406,6 @@ app.post("/actualizarCantante", verificarToken, (req, res) => {
     const usuarioId = req.usuario.id;
     const isAdmin = req.usuario.esAdmin;
     
-    // Validar campos para prevenir inyección SQL
     const validacion = validarCamposMultiples({
         nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita
     });

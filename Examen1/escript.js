@@ -34,38 +34,33 @@ $(document).ready(() => {
         return true;
     }
     
-    // Función mejorada para limpiar texto y prevenir inyecciones SQL
     function limpiarTexto(texto) {
         if (!texto) return "";
         
-        // Eliminar etiquetas HTML
         let textoLimpio = texto.replace(/<[^>]*>?/g, '').trim();
         
-        // Filtrar patrones comunes de inyección SQL
         textoLimpio = textoLimpio
-            .replace(/'/g, "''") // Escape de comillas simples
-            .replace(/;/g, "") // Eliminar punto y coma
-            .replace(/--/g, "") // Eliminar comentarios SQL
-            .replace(/\/\*/g, "") // Eliminar inicio de comentario multi-línea
-            .replace(/\*\//g, "") // Eliminar fin de comentario multi-línea
-            .replace(/union\s+select/gi, "") // Prevenir UNION SELECT
-            .replace(/select/gi, "") // Filtrar SELECT
-            .replace(/update/gi, "") // Filtrar UPDATE
-            .replace(/delete/gi, "") // Filtrar DELETE
-            .replace(/insert/gi, "") // Filtrar INSERT
-            .replace(/drop/gi, "") // Filtrar DROP
-            .replace(/alter/gi, "") // Filtrar ALTER
-            .replace(/from/gi, "") // Filtrar FROM
-            .replace(/where/gi, ""); // Filtrar WHERE
+            .replace(/'/g, "''") 
+            .replace(/;/g, "") 
+            .replace(/--/g, "") 
+            .replace(/\/\*/g, "") 
+            .replace(/\*\//g, "")
+            .replace(/union\s+select/gi, "") 
+            .replace(/select/gi, "") 
+            .replace(/update/gi, "")
+            .replace(/delete/gi, "")
+            .replace(/insert/gi, "")
+            .replace(/drop/gi, "")
+            .replace(/alter/gi, "")
+            .replace(/from/gi, "")
+            .replace(/where/gi, "");
         
         return textoLimpio;
     }
     
-    // Función para validar si hay patrones de inyección SQL
     function validarEntrada(texto) {
         if (!texto) return true;
         
-        // Patrones de inyección SQL comunes
         const patronesPeligrosos = [
             /'.*OR.*'/i,
             /'.*=.*'/i,
@@ -81,7 +76,6 @@ $(document).ready(() => {
             /alter\s+table/i
         ];
         
-        // Verificar si algún patrón peligroso está presente
         for (const patron of patronesPeligrosos) {
             if (patron.test(texto)) {
                 return false;
@@ -96,7 +90,6 @@ $(document).ready(() => {
         
         if (!verificarAutenticacion()) return;
         
-        // Valores originales para validación
         const nombre = $("#nombre").val();
         const nombre_artistico = $("#nombre_artistico").val();
         const genero = $("#genero").val();
@@ -107,7 +100,6 @@ $(document).ready(() => {
         const situacion_amorosa = $("#situacion_amorosa").val();
         const cancion_favorita = $("#cancion_favorita").val();
         
-        // Validar campos para detectar inyecciones SQL
         const camposAValidar = [nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita];
         
         for (const campo of camposAValidar) {
@@ -208,7 +200,6 @@ $(document).ready(() => {
     };
     
     window.cargarFormulario = function (id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita) {
-        // Limpiamos todos los valores para evitar la propagación de posibles inyecciones
         $("#id").val(id);
         $("#nombre").val(limpiarTexto(nombre));
         $("#nombre_artistico").val(limpiarTexto(nombre_artistico));
@@ -248,7 +239,6 @@ $(document).ready(() => {
                 }
                 
                 data.forEach(cantante => {
-                    // Escapar datos para evitar inyecciones en la tabla HTML
                     const nombre_seguro = limpiarTexto(cantante.nombre || '');
                     const nombre_artistico_seguro = limpiarTexto(cantante.nombre_artistico || '');
                     const genero_seguro = limpiarTexto(cantante.genero || '');
@@ -279,7 +269,6 @@ $(document).ready(() => {
                         filas += `<small>Creado por: ${limpiarTexto(cantante.creador)}</small><br>`;
                     }
                     
-                    // Usar escape adecuado para los strings en JavaScript
                     filas += `
                                 <button onclick="cargarFormulario(
                                     ${cantante.id}, 
@@ -317,7 +306,6 @@ $(document).ready(() => {
         });
     }
 
-    // Cargar cantantes al iniciar si hay token
     if (token) {
         cargarCantantes();
     }
