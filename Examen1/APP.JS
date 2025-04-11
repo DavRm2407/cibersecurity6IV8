@@ -93,7 +93,7 @@ con.connect(err => {
         console.error("Error de conexión a MySQL:", err);
         return;
     }
-    console.log("Conectado a MySQL");
+    console.log("Connected a MySQL");
     
    
     const createTableQuery = `
@@ -111,7 +111,7 @@ con.connect(err => {
         if (err) {
             console.error('Error al crear la tabla usuarios:', err);
         } else {
-            console.log('Tabla usuarios lista');
+            console.log('Table usuarios ready baby');
             
             con.query("SHOW COLUMNS FROM cantantes LIKE 'usuario_id'", (err, result) => {
                 if (err) {
@@ -132,7 +132,7 @@ con.connect(err => {
                         }
                     });
                 } else {
-                    console.log('La columna usuario_id ya existe');
+                    console.log('The column usuario_id already exist honey');
                     addForeignKeyConstraint();
                 }
             });
@@ -163,7 +163,7 @@ con.connect(err => {
                     }
                 });
             } else {
-                console.log('La restricción ya existe');
+                console.log('La restricción already exist mon amour');
             }
         });
     }
