@@ -76,9 +76,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'Examen1')));
+app.use(express.static(__dirname));
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'Examen1', 'Crud.html'));
+    res.sendFile(path.join(__dirname, 'Crud.html'));
 });
 
 var con = mysql.createConnection({
