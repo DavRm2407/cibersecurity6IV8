@@ -8,6 +8,12 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const PORT = process.env.PORT || 3000;
 
+// Función para limpiar texto (estaba siendo usada pero no definida)
+function limpiarTexto(texto) {
+    if (!texto) return "";
+    return xss(texto.toString().trim());
+}
+
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -43,25 +49,26 @@ con.connect(err => {
         fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
  
-const alterCantantesTable = `
-ALTER TABLE cantantes 
-ADD COLUMN IF NOT EXISTS usuario_id INT,
-ADD CONSTRAINT fk_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
-`;
+    const alterCantantesTable = `
+    ALTER TABLE cantantes 
+    ADD COLUMN usuario_id INT,
+    ADD CONSTRAINT fk_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+    `;
 
-con.query(alterCantantesTable, (err, result) => {
-    if (err) {
-        console.error('Error al modificar la tabla cantantes:', err);
-    } else {
-        console.log('Tabla cantantes actualizada con usuario_id');
-    }
-});
-    
     con.query(createTableQuery, (err, result) => {
         if (err) {
             console.error('Error al crear la tabla usuarios:', err);
         } else {
             console.log('Tabla usuarios lista');
+            
+            // Ejecutar la alteración de la tabla cantantes después de crear usuarios
+            con.query(alterCantantesTable, (err, result) => {
+                if (err) {
+                    console.error('Error al modificar la tabla cantantes:', err);
+                } else {
+                    console.log('Tabla cantantes actualizada con usuario_id');
+                }
+            });
         }
     });
 });
@@ -85,6 +92,8 @@ function verificarToken(req, res, next) {
             }
             
             req.usuario = results[0];
+            // Añadir la propiedad esAdmin al objeto usuario basado en el nombre de usuario
+            req.usuario.esAdmin = req.usuario.usuario === 'admin';
             next();
         });
     } catch (error) {
@@ -190,6 +199,7 @@ app.post('/api/login', (req, res) => {
         res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
     }
 });
+
 app.get('/api/usuario', verificarToken, (req, res) => {
     try {
         con.query('SELECT id, nombre, apellido, usuario, email FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
@@ -213,160 +223,10 @@ app.get('/api/usuario', verificarToken, (req, res) => {
     }
 });
 
-app.get("/obtenerCantantes", (req, res) => {
-    con.query("SELECT * FROM cantantes", (err, results) => {
-        if (err) return res.status(500).json({ error: "Error al obtener datos" });
-        res.json(results);
-    });
-});
-
-app.post("/agregarCantante", (req, res) => {
-    let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
-    
-    if (!nombre || !nombre_artistico || !genero || !pais || !edad || !anos_carrera) {
-        return res.status(400).json({ error: "Todos los campos requeridos deben estar llenos" });
-    }
-
-    let query = "INSERT INTO cantantes (nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    let values = [limpiarTexto(nombre), limpiarTexto(nombre_artistico), limpiarTexto(genero), limpiarTexto(pais), edad, anos_carrera, limpiarTexto(discografia), limpiarTexto(redes_sociales), limpiarTexto(premios), limpiarTexto(situacion_amorosa), limpiarTexto(cancion_favorita)];
-
-    con.query(query, values, (err) => {
-        if (err) return res.status(500).json({ error: "Error al agregar cantante" });
-        res.json({ mensaje: "Cantante agregado correctamente" });
-    });
-});
-
-app.post("/actualizarCantante", (req, res) => {
-    let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
-
-    let query = "UPDATE cantantes SET nombre=?, nombre_artistico=?, genero=?, pais=?, edad=?, anos_carrera=?, discografia=?, redes_sociales=?, premios=?, situacion_amorosa=?, cancion_favorita=? WHERE id=?";
-    let values = [limpiarTexto(nombre), limpiarTexto(nombre_artistico), limpiarTexto(genero), limpiarTexto(pais), edad, anos_carrera, limpiarTexto(discografia), limpiarTexto(redes_sociales), limpiarTexto(premios), limpiarTexto(situacion_amorosa), limpiarTexto(cancion_favorita), id];
-
-    con.query(query, values, (err) => {
-        if (err) return res.status(500).json({ error: "Error al actualizar cantante" });
-        res.json({ mensaje: "Cantante actualizado correctamente" });
-    });
-});
-
-app.post("/eliminarCantante", (req, res) => {
-    let { id } = req.body;
-    con.query("DELETE FROM cantantes WHERE id=?", [id], (err) => {
-        if (err) return res.status(500).json({ error: "Error al eliminar cantante" });
-        res.json({ mensaje: "Cantante eliminado correctamente" });
-    });
-});
-
-function esAdmin(req, res, next) {
-    con.query('SELECT usuario FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
-        if (err || results.length === 0) {
-            return res.status(403).json({ exito: false, mensaje: 'Acceso denegado' });
-        }
-        
-        if (results[0].usuario === 'admin') {
-            next(); 
-        } else {
-            return res.status(403).json({ exito: false, mensaje: 'Se requiere permisos de administrador' });
-        }
-    });
-}
-
-app.get("/obtenerCantantes", verificarToken, (req, res) => {
-    con.query("SELECT * FROM cantantes", (err, results) => {
-        if (err) return res.status(500).json({ error: "Error al obtener datos" });
-        res.json(results);
-    });
-});
-
-app.post("/agregarCantante", verificarToken, esAdmin, (req, res) => {
-});
-
-app.post("/actualizarCantante", verificarToken, esAdmin, (req, res) => {
-});
-
-app.post("/eliminarCantante", verificarToken, esAdmin, (req, res) => {
-});
-
-function verificarAdmin(req, res, next) {
-    con.query('SELECT usuario FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
-        if (err || results.length === 0) {
-            return res.status(403).json({ exito: false, mensaje: 'Acceso denegado' });
-        }
-        
-        if (results[0].usuario === 'admin') {
-            next();
-        } else {
-            return res.status(403).json({ exito: false, mensaje: 'Se requiere permisos de administrador' });
-        }
-    });
-}
-
-app.get("/cantantesAdmin", verificarToken, verificarAdmin, (req, res) => {
-});
-
-app.get("/obtenerCantantes", verificarToken, (req, res) => {
-});
-
-app.post("/agregarCantante", verificarToken, (req, res) => {
-});
-
-app.post("/eliminarCantante", verificarToken, verificarAdmin, (req, res) => {
-});
-
-app.get("/obtenerCantantes", verificarToken, (req, res) => {
-    con.query("SELECT * FROM cantantes", (err, results) => {
-        if (err) return res.status(500).json({ error: "Error al obtener datos" });
-        res.json(results);
-    });
-});
-
-app.post("/agregarCantante", verificarToken, (req, res) => {
-    let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
-    
-    if (!nombre || !nombre_artistico || !genero || !pais || !edad || !anos_carrera) {
-        return res.status(400).json({ error: "Todos los campos requeridos deben estar llenos" });
-    }
-
-    let query = "INSERT INTO cantantes (nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    let values = [limpiarTexto(nombre), limpiarTexto(nombre_artistico), limpiarTexto(genero), limpiarTexto(pais), edad, anos_carrera, limpiarTexto(discografia), limpiarTexto(redes_sociales), limpiarTexto(premios), limpiarTexto(situacion_amorosa), limpiarTexto(cancion_favorita)];
-
-    con.query(query, values, (err) => {
-        if (err) {
-            console.error("Error al agregar cantante:", err);
-            return res.status(500).json({ error: "Error al agregar cantante" });
-        }
-        res.json({ mensaje: "Cantante agregado correctamente" });
-    });
-});
-
-app.post("/actualizarCantante", verificarToken, (req, res) => {
-    let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
-
-    let query = "UPDATE cantantes SET nombre=?, nombre_artistico=?, genero=?, pais=?, edad=?, anos_carrera=?, discografia=?, redes_sociales=?, premios=?, situacion_amorosa=?, cancion_favorita=? WHERE id=?";
-    let values = [limpiarTexto(nombre), limpiarTexto(nombre_artistico), limpiarTexto(genero), limpiarTexto(pais), edad, anos_carrera, limpiarTexto(discografia), limpiarTexto(redes_sociales), limpiarTexto(premios), limpiarTexto(situacion_amorosa), limpiarTexto(cancion_favorita), id];
-
-    con.query(query, values, (err) => {
-        if (err) {
-            console.error("Error al actualizar cantante:", err);
-            return res.status(500).json({ error: "Error al actualizar cantante" });
-        }
-        res.json({ mensaje: "Cantante actualizado correctamente" });
-    });
-});
-
-app.post("/eliminarCantante", verificarToken, (req, res) => {
-    let { id } = req.body;
-    con.query("DELETE FROM cantantes WHERE id=?", [id], (err) => {
-        if (err) {
-            console.error("Error al eliminar cantante:", err);
-            return res.status(500).json({ error: "Error al eliminar cantante" });
-        }
-        res.json({ mensaje: "Cantante eliminado correctamente" });
-    });
-});
-
+// Eliminar rutas duplicadas y dejar solo una versión de cada endpoint
 app.get("/obtenerCantantes", verificarToken, (req, res) => {
     const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.usuario === 'admin';
+    const isAdmin = req.usuario.esAdmin;
 
     const query = isAdmin 
         ? "SELECT c.*, u.usuario as creador FROM cantantes c LEFT JOIN usuarios u ON c.usuario_id = u.id" 
@@ -382,22 +242,6 @@ app.get("/obtenerCantantes", verificarToken, (req, res) => {
         res.json(results);
     });
 });
-
-    const isAdmin = true; 
-    const query = isAdmin 
-        ? "SELECT c.*, u.usuario as creador FROM cantantes c LEFT JOIN usuarios u ON c.usuario_id = u.id" 
-        : "SELECT * FROM cantantes WHERE usuario_id = ?";
-    
-    const params = isAdmin ? [] : [usuarioId];
-    
-    con.query(query, params, (err, results) => {
-        if (err) {
-            console.error("Error al obtener cantantes:", err);
-            return res.status(500).json({ error: "Error al obtener datos" });
-        }
-        res.json(results);
-    });
-;
 
 app.post("/agregarCantante", verificarToken, (req, res) => {
     let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
@@ -435,7 +279,7 @@ app.post("/agregarCantante", verificarToken, (req, res) => {
 app.post("/actualizarCantante", verificarToken, (req, res) => {
     let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
     const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.usuario === 'admin';
+    const isAdmin = req.usuario.esAdmin;
     
     const checkOwnershipQuery = "SELECT usuario_id FROM cantantes WHERE id = ?";
     
@@ -484,7 +328,7 @@ app.post("/actualizarCantante", verificarToken, (req, res) => {
 app.post("/eliminarCantante", verificarToken, (req, res) => {
     let { id } = req.body;
     const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.usuario === 'admin';
+    const isAdmin = req.usuario.esAdmin;
 
     if (isAdmin) {
         con.query("DELETE FROM cantantes WHERE id=?", [id], (err) => {
@@ -509,7 +353,6 @@ app.post("/eliminarCantante", verificarToken, (req, res) => {
         });
     }
 });
-
 
 app.listen(3000, () => {
     console.log("Servidor corriendo in the port: 3000");
