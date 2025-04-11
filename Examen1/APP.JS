@@ -383,6 +383,7 @@ app.get("/obtenerCantantes", verificarToken, (req, res) => {
     });
 });
 
+    const isAdmin = true; 
     const query = isAdmin 
         ? "SELECT c.*, u.usuario as creador FROM cantantes c LEFT JOIN usuarios u ON c.usuario_id = u.id" 
         : "SELECT * FROM cantantes WHERE usuario_id = ?";

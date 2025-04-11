@@ -1,0 +1,6 @@
+express 
+cors 
+body-parser 
+mysql2 
+bcryptjs 
+jsonwebtoken
