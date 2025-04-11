@@ -49,28 +49,72 @@ con.connect(err => {
         fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
  
-    const alterCantantesTable = `
-    ALTER TABLE cantantes 
-    ADD COLUMN usuario_id INT,
-    ADD CONSTRAINT fk_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
-    `;
-
     con.query(createTableQuery, (err, result) => {
         if (err) {
             console.error('Error al crear la tabla usuarios:', err);
         } else {
             console.log('Tabla usuarios lista');
             
-            // Ejecutar la alteración de la tabla cantantes después de crear usuarios
-            con.query(alterCantantesTable, (err, result) => {
+            // Primero verificar si la columna usuario_id ya existe en la tabla cantantes
+            con.query("SHOW COLUMNS FROM cantantes LIKE 'usuario_id'", (err, result) => {
                 if (err) {
-                    console.error('Error al modificar la tabla cantantes:', err);
+                    console.error('Error al verificar columna usuario_id:', err);
+                    return;
+                }
+                
+                // Si la columna no existe, la añadimos
+                if (result.length === 0) {
+                    con.query(`
+                        ALTER TABLE cantantes 
+                        ADD COLUMN usuario_id INT
+                    `, (err, result) => {
+                        if (err) {
+                            console.error('Error al añadir columna usuario_id:', err);
+                        } else {
+                            console.log('Columna usuario_id añadida correctamente');
+                            // Después de añadir la columna, intentamos añadir la restricción
+                            addForeignKeyConstraint();
+                        }
+                    });
                 } else {
-                    console.log('Tabla cantantes actualizada con usuario_id');
+                    console.log('La columna usuario_id ya existe');
+                    // Si la columna ya existe, solo añadimos la restricción
+                    addForeignKeyConstraint();
                 }
             });
         }
     });
+    
+    // Función para añadir la restricción de clave foránea
+    function addForeignKeyConstraint() {
+        // Verificar si la restricción ya existe
+        con.query(`
+            SELECT COUNT(*) AS constraint_exists
+            FROM information_schema.TABLE_CONSTRAINTS 
+            WHERE CONSTRAINT_NAME = 'fk_usuario' 
+            AND TABLE_NAME = 'cantantes'
+        `, (err, result) => {
+            if (err) {
+                console.error('Error al verificar restricción:', err);
+                return;
+            }
+            
+            if (result[0].constraint_exists === 0) {
+                con.query(`
+                    ALTER TABLE cantantes 
+                    ADD CONSTRAINT fk_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+                `, (err, result) => {
+                    if (err) {
+                        console.error('Error al añadir restricción:', err);
+                    } else {
+                        console.log('Restricción de clave foránea añadida');
+                    }
+                });
+            } else {
+                console.log('La restricción ya existe');
+            }
+        });
+    }
 });
 
 
