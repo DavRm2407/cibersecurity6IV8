@@ -6,7 +6,42 @@ const path = require('path');
 const xss = require("xss");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto"); // Para AES en el servidor
 const PORT = process.env.PORT || 3000;
+
+// CONFIGURACIÓN AES PARA EL SERVIDOR
+const AES_SECRET_KEY = 'MiClaveSecretaParaCifradoAES2024!'; // Debe coincidir con el frontend
+const AES_ALGORITHM = 'aes-256-cbc';
+
+// Funciones de cifrado AES para el servidor
+function descifrarAES(textoCifrado) {
+    try {
+        // Para compatibilidad con CryptoJS del frontend
+        const CryptoJS = require('crypto-js');
+        const bytes = CryptoJS.AES.decrypt(textoCifrado, AES_SECRET_KEY);
+        const textoOriginal = bytes.toString(CryptoJS.enc.Utf8);
+        
+        if (!textoOriginal) {
+            throw new Error('Error al descifrar');
+        }
+        
+        return textoOriginal;
+    } catch (error) {
+        console.error('Error al descifrar AES:', error);
+        throw new Error('Error en descifrado');
+    }
+}
+
+function cifrarAES(texto) {
+    try {
+        const CryptoJS = require('crypto-js');
+        const textoCifrado = CryptoJS.AES.encrypt(texto, AES_SECRET_KEY).toString();
+        return textoCifrado;
+    } catch (error) {
+        console.error('Error al cifrar AES:', error);
+        throw new Error('Error en cifrado');
+    }
+}
 
 function limpiarTexto(texto) {
     if (!texto) return "";
@@ -77,6 +112,10 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
+
+// Servir crypto-js desde node_modules
+app.use('/crypto-js', express.static(path.join(__dirname, 'node_modules/crypto-js')));
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'Crud.html'));
 });
@@ -95,7 +134,6 @@ con.connect(err => {
     }
     console.log("Connected a MySQL");
     
-   
     const createTableQuery = `
     CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -103,7 +141,8 @@ con.connect(err => {
         apellido VARCHAR(50) NOT NULL,
         usuario VARCHAR(50) UNIQUE NOT NULL,
         email VARCHAR(100) UNIQUE NOT NULL,
-        contrasena VARCHAR(100) NOT NULL,
+        contrasena VARCHAR(255) NOT NULL,
+        contrasena_aes TEXT, 
         fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
  
@@ -169,7 +208,6 @@ con.connect(err => {
     }
 });
 
-
 const JWT_SECRET = 'clave_secreta_para_jwt_cantantes_app';
 
 function verificarToken(req, res, next) {
@@ -196,9 +234,9 @@ function verificarToken(req, res, next) {
     }
 }
 
-
+// REGISTRO MODIFICADO PARA MANEJAR AES
 app.post('/api/registro', async (req, res) => {
-    const { nombre, apellido, usuario, email, contrasena } = req.body;
+    const { nombre, apellido, usuario, email, contrasena, esCifrada } = req.body;
     
     const validacion = validarCamposMultiples({
         nombre, apellido, usuario, email
@@ -218,6 +256,17 @@ app.post('/api/registro', async (req, res) => {
         const usuarioLimpio = limpiarTexto(usuario);
         const emailLimpio = limpiarTexto(email);
         
+        // Descifrar contraseña si viene cifrada desde el frontend
+        let contrasenaParaProcesar = contrasena;
+        if (esCifrada) {
+            try {
+                contrasenaParaProcesar = descifrarAES(contrasena);
+                console.log('🔓 Contraseña descifrada en el servidor');
+            } catch (error) {
+                return res.status(400).json({ exito: false, mensaje: 'Error al procesar la contraseña' });
+            }
+        }
+        
         con.query('SELECT * FROM usuarios WHERE usuario = ? OR email = ?', [usuarioLimpio, emailLimpio], async (err, results) => {
             if (err) {
                 console.error('Error en la consulta:', err);
@@ -228,17 +277,35 @@ app.post('/api/registro', async (req, res) => {
                 return res.status(400).json({ exito: false, mensaje: 'El usuario o email ya está registrado' });
             }
             
+            // Cifrar con bcrypt para la BD
             const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(contrasena, salt);
+            const hashedPassword = await bcrypt.hash(contrasenaParaProcesar, salt);
             
-            const insertQuery = 'INSERT INTO usuarios (nombre, apellido, usuario, email, contrasena) VALUES (?, ?, ?, ?, ?)';
-            con.query(insertQuery, [nombreLimpio, apellidoLimpio, usuarioLimpio, emailLimpio, hashedPassword], (err, result) => {
+            // Guardar también la versión AES para compatibilidad futura
+            const contrasenaAES = cifrarAES(contrasenaParaProcesar);
+            
+// Continuación del código desde donde se cortó...
+
+            const insertQuery = 'INSERT INTO usuarios (nombre, apellido, usuario, email, contrasena, contrasena_aes) VALUES (?, ?, ?, ?, ?, ?)';
+            
+            con.query(insertQuery, [nombreLimpio, apellidoLimpio, usuarioLimpio, emailLimpio, hashedPassword, contrasenaAES], (err, result) => {
                 if (err) {
                     console.error('Error al insertar usuario:', err);
                     return res.status(500).json({ exito: false, mensaje: 'Error al registrar usuario' });
                 }
                 
-                res.json({ exito: true, mensaje: 'Usuario registrado con éxito' });
+                console.log('✅ Usuario registrado exitosamente');
+                res.status(201).json({ 
+                    exito: true, 
+                    mensaje: 'Usuario registrado exitosamente',
+                    usuario: {
+                        id: result.insertId,
+                        nombre: nombreLimpio,
+                        apellido: apellidoLimpio,
+                        usuario: usuarioLimpio,
+                        email: emailLimpio
+                    }
+                });
             });
         });
     } catch (error) {
@@ -247,70 +314,83 @@ app.post('/api/registro', async (req, res) => {
     }
 });
 
-app.post('/api/login', (req, res) => {
-    const { usuarioEmail, contrasena } = req.body;
+// LOGIN MODIFICADO PARA MANEJAR AES
+app.post('/api/login', async (req, res) => {
+    const { usuario, contrasena, esCifrada } = req.body;
     
-    const validacion = validarCamposMultiples({
-        usuarioEmail
-    });
+    if (!usuario || !contrasena) {
+        return res.status(400).json({ exito: false, mensaje: 'Por favor, ingrese usuario y contraseña' });
+    }
     
+    const validacion = validarCamposMultiples({ usuario });
     if (!validacion.valido) {
         return res.status(400).json({ exito: false, mensaje: validacion.mensaje });
     }
     
-    if (!usuarioEmail || !contrasena) {
-        return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos' });
-    }
-    
     try {
-        const usuarioEmailLimpio = limpiarTexto(usuarioEmail);
+        const usuarioLimpio = limpiarTexto(usuario);
         
-        const query = 'SELECT * FROM usuarios WHERE usuario = ? OR email = ?';
-        con.query(query, [usuarioEmailLimpio, usuarioEmailLimpio], async (err, results) => {
+        // Descifrar contraseña si viene cifrada desde el frontend
+        let contrasenaParaProcesar = contrasena;
+        if (esCifrada) {
+            try {
+                contrasenaParaProcesar = descifrarAES(contrasena);
+                console.log('🔓 Contraseña de login descifrada en el servidor');
+            } catch (error) {
+                return res.status(400).json({ exito: false, mensaje: 'Error al procesar la contraseña' });
+            }
+        }
+        
+        con.query('SELECT * FROM usuarios WHERE usuario = ?', [usuarioLimpio], async (err, results) => {
             if (err) {
                 console.error('Error en la consulta:', err);
                 return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
             }
             
             if (results.length === 0) {
-                return res.status(400).json({ exito: false, mensaje: 'Credenciales inválidas' });
+                return res.status(400).json({ exito: false, mensaje: 'Usuario no encontrado' });
             }
             
-            const usuario = results[0];
+            const usuarioDB = results[0];
             
-            const isMatch = await bcrypt.compare(contrasena, usuario.contrasena);
-            if (!isMatch) {
-                return res.status(400).json({ exito: false, mensaje: 'Credenciales inválidas' });
+            // Verificar contraseña con bcrypt
+            const contrasenaValida = await bcrypt.compare(contrasenaParaProcesar, usuarioDB.contrasena);
+            
+            if (!contrasenaValida) {
+                return res.status(400).json({ exito: false, mensaje: 'Contraseña incorrecta' });
             }
             
+            // Crear token JWT
             const payload = {
                 usuario: {
-                    id: usuario.id,
-                    nombre: usuario.nombre,
-                    usuario: usuario.usuario,
-                    esAdmin: usuario.usuario === 'admin'
+                    id: usuarioDB.id,
+                    nombre: usuarioDB.nombre,
+                    usuario: usuarioDB.usuario,
+                    esAdmin: usuarioDB.usuario === 'admin'
                 }
             };
             
-            jwt.sign(
-                payload,
-                JWT_SECRET,
-                { expiresIn: '1h' },
-                (err, token) => {
-                    if (err) throw err;
-                    res.json({
-                        exito: true,
-                        mensaje: 'Inicio de sesión exitoso',
-                        token,
-                        usuario: {
-                            id: usuario.id,
-                            nombre: usuario.nombre,
-                            usuario: usuario.usuario,
-                            esAdmin: usuario.usuario === 'admin'
-                        }
-                    });
+            jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
+                if (err) {
+                    console.error('Error al generar token:', err);
+                    return res.status(500).json({ exito: false, mensaje: 'Error al generar token' });
                 }
-            );
+                
+                console.log('✅ Login exitoso para:', usuarioLimpio);
+                res.json({
+                    exito: true,
+                    mensaje: 'Login exitoso',
+                    token,
+                    usuario: {
+                        id: usuarioDB.id,
+                        nombre: usuarioDB.nombre,
+                        apellido: usuarioDB.apellido,
+                        usuario: usuarioDB.usuario,
+                        email: usuarioDB.email,
+                        esAdmin: usuarioDB.usuario === 'admin'
+                    }
+                });
+            });
         });
     } catch (error) {
         console.error('Error en el login:', error);
@@ -318,175 +398,305 @@ app.post('/api/login', (req, res) => {
     }
 });
 
-app.get('/api/usuario', verificarToken, (req, res) => {
-    try {
-        con.query('SELECT id, nombre, apellido, usuario, email FROM usuarios WHERE id = ?', [req.usuario.id], (err, results) => {
+// VERIFICAR TOKEN
+app.get('/api/verificar-token', verificarToken, (req, res) => {
+    res.json({
+        exito: true,
+        usuario: {
+            id: req.usuario.id,
+            nombre: req.usuario.nombre,
+            usuario: req.usuario.usuario,
+            esAdmin: req.usuario.esAdmin
+        }
+    });
+});
+
+// CRUD DE CANTANTES CON CONTROL DE USUARIOS
+
+// Obtener todos los cantantes
+app.get('/api/cantantes', verificarToken, (req, res) => {
+    let query = `
+        SELECT c.*, u.nombre as nombre_usuario, u.usuario as username_usuario 
+        FROM cantantes c 
+        LEFT JOIN usuarios u ON c.usuario_id = u.id
+    `;
+    
+    // Si no es admin, solo mostrar sus propios cantantes
+    if (!req.usuario.esAdmin) {
+        query += ` WHERE c.usuario_id = ?`;
+        con.query(query, [req.usuario.id], (err, results) => {
             if (err) {
-                console.error('Error al obtener datos del usuario:', err);
+                console.error('Error al obtener cantantes:', err);
                 return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
             }
-            
-            if (results.length === 0) {
-                return res.status(404).json({ exito: false, mensaje: 'Usuario no encontrado' });
-            }
-            
-            res.json({
-                exito: true,
-                usuario: results[0]
-            });
+            res.json({ exito: true, cantantes: results });
         });
-    } catch (error) {
-        console.error('Error al obtener usuario:', error);
-        res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+    } else {
+        con.query(query, (err, results) => {
+            if (err) {
+                console.error('Error al obtener cantantes:', err);
+                return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+            }
+            res.json({ exito: true, cantantes: results });
+        });
     }
 });
 
-app.get("/obtenerCantantes", verificarToken, (req, res) => {
-    const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.esAdmin;
-
-    const query = isAdmin 
-        ? "SELECT c.*, u.usuario as creador FROM cantantes c LEFT JOIN usuarios u ON c.usuario_id = u.id" 
-        : "SELECT * FROM cantantes WHERE usuario_id = ?";
-    
-    const params = isAdmin ? [] : [usuarioId];
-    
-    con.query(query, params, (err, results) => {
-        if (err) {
-            console.error("Error al obtener cantantes:", err);
-            return res.status(500).json({ error: "Error al obtener datos" });
-        }
-        res.json(results);
-    });
-});
-
-app.post("/agregarCantante", verificarToken, (req, res) => {
-    let { nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
-    const usuarioId = req.usuario.id;
+// Crear cantante
+app.post('/api/cantantes', verificarToken, (req, res) => {
+    const { nombre, apellido, genero, edad, foto } = req.body;
     
     const validacion = validarCamposMultiples({
-        nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita
+        nombre, apellido, genero, edad: edad?.toString(), foto
     });
     
     if (!validacion.valido) {
-        return res.status(400).json({ error: validacion.mensaje });
+        return res.status(400).json({ exito: false, mensaje: validacion.mensaje });
     }
     
-    if (!nombre || !nombre_artistico || !genero || !pais || !edad || !anos_carrera) {
-        return res.status(400).json({ error: "Todos los campos requeridos deben estar llenos" });
+    if (!nombre || !apellido || !genero || !edad) {
+        return res.status(400).json({ exito: false, mensaje: 'Por favor, complete todos los campos obligatorios' });
     }
-
-    let query = "INSERT INTO cantantes (nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    let values = [
-        limpiarTexto(nombre), 
-        limpiarTexto(nombre_artistico), 
-        limpiarTexto(genero), 
-        limpiarTexto(pais), 
-        edad, 
-        anos_carrera, 
-        limpiarTexto(discografia), 
-        limpiarTexto(redes_sociales), 
-        limpiarTexto(premios), 
-        limpiarTexto(situacion_amorosa), 
-        limpiarTexto(cancion_favorita),
-        usuarioId
-    ];
-
-    con.query(query, values, (err) => {
+    
+    const nombreLimpio = limpiarTexto(nombre);
+    const apellidoLimpio = limpiarTexto(apellido);
+    const generoLimpio = limpiarTexto(genero);
+    const edadLimpia = parseInt(edad);
+    const fotoLimpia = foto ? limpiarTexto(foto) : null;
+    
+    if (isNaN(edadLimpia) || edadLimpia < 1 || edadLimpia > 120) {
+        return res.status(400).json({ exito: false, mensaje: 'La edad debe ser un número válido entre 1 y 120' });
+    }
+    
+    const query = 'INSERT INTO cantantes (nombre, apellido, genero, edad, foto, usuario_id) VALUES (?, ?, ?, ?, ?, ?)';
+    
+    con.query(query, [nombreLimpio, apellidoLimpio, generoLimpio, edadLimpia, fotoLimpia, req.usuario.id], (err, result) => {
         if (err) {
-            console.error("Error al agregar cantante:", err);
-            return res.status(500).json({ error: "Error al agregar cantante" });
+            console.error('Error al crear cantante:', err);
+            return res.status(500).json({ exito: false, mensaje: 'Error al crear cantante' });
         }
-        res.json({ mensaje: "Cantante agregado correctamente" });
+        
+        console.log('✅ Cantante creado exitosamente por usuario:', req.usuario.usuario);
+        res.status(201).json({
+            exito: true,
+            mensaje: 'Cantante creado exitosamente',
+            cantante: {
+                id: result.insertId,
+                nombre: nombreLimpio,
+                apellido: apellidoLimpio,
+                genero: generoLimpio,
+                edad: edadLimpia,
+                foto: fotoLimpia,
+                usuario_id: req.usuario.id
+            }
+        });
     });
 });
 
-app.post("/actualizarCantante", verificarToken, (req, res) => {
-    let { id, nombre, nombre_artistico, genero, pais, edad, anos_carrera, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita } = req.body;
-    const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.esAdmin;
+// Actualizar cantante
+app.put('/api/cantantes/:id', verificarToken, (req, res) => {
+    const cantanteId = parseInt(req.params.id);
+    const { nombre, apellido, genero, edad, foto } = req.body;
+    
+    if (isNaN(cantanteId)) {
+        return res.status(400).json({ exito: false, mensaje: 'ID de cantante inválido' });
+    }
     
     const validacion = validarCamposMultiples({
-        nombre, nombre_artistico, genero, pais, discografia, redes_sociales, premios, situacion_amorosa, cancion_favorita
+        nombre, apellido, genero, edad: edad?.toString(), foto
     });
     
     if (!validacion.valido) {
-        return res.status(400).json({ error: validacion.mensaje });
+        return res.status(400).json({ exito: false, mensaje: validacion.mensaje });
     }
     
-    const checkOwnershipQuery = "SELECT usuario_id FROM cantantes WHERE id = ?";
+    // Verificar si el cantante existe y si el usuario tiene permisos
+    let verificarQuery = 'SELECT * FROM cantantes WHERE id = ?';
+    let verificarParams = [cantanteId];
     
-    con.query(checkOwnershipQuery, [id], (err, results) => {
+    if (!req.usuario.esAdmin) {
+        verificarQuery += ' AND usuario_id = ?';
+        verificarParams.push(req.usuario.id);
+    }
+    
+    con.query(verificarQuery, verificarParams, (err, results) => {
         if (err) {
-            console.error("Error al verificar propiedad:", err);
-            return res.status(500).json({ error: "Error del servidor" });
+            console.error('Error al verificar cantante:', err);
+            return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
         }
         
         if (results.length === 0) {
-            return res.status(404).json({ error: "Cantante no encontrado" });
+            return res.status(404).json({ exito: false, mensaje: 'Cantante no encontrado o no tiene permisos para editarlo' });
         }
         
-        const cantanteUsuarioId = results[0].usuario_id;
+        const nombreLimpio = limpiarTexto(nombre);
+        const apellidoLimpio = limpiarTexto(apellido);
+        const generoLimpio = limpiarTexto(genero);
+        const edadLimpia = parseInt(edad);
+        const fotoLimpia = foto ? limpiarTexto(foto) : null;
         
-        if (!isAdmin && cantanteUsuarioId !== usuarioId) {
-            return res.status(403).json({ error: "No tienes permiso para editar este cantante" });
+        if (isNaN(edadLimpia) || edadLimpia < 1 || edadLimpia > 120) {
+            return res.status(400).json({ exito: false, mensaje: 'La edad debe ser un número válido entre 1 y 120' });
         }
         
-        let query = "UPDATE cantantes SET nombre=?, nombre_artistico=?, genero=?, pais=?, edad=?, anos_carrera=?, discografia=?, redes_sociales=?, premios=?, situacion_amorosa=?, cancion_favorita=? WHERE id=?";
-        let values = [
-            limpiarTexto(nombre), 
-            limpiarTexto(nombre_artistico), 
-            limpiarTexto(genero), 
-            limpiarTexto(pais), 
-            edad, 
-            anos_carrera, 
-            limpiarTexto(discografia), 
-            limpiarTexto(redes_sociales), 
-            limpiarTexto(premios), 
-            limpiarTexto(situacion_amorosa), 
-            limpiarTexto(cancion_favorita), 
-            id
-        ];
-
-        con.query(query, values, (err) => {
+        const updateQuery = 'UPDATE cantantes SET nombre = ?, apellido = ?, genero = ?, edad = ?, foto = ? WHERE id = ?';
+        
+        con.query(updateQuery, [nombreLimpio, apellidoLimpio, generoLimpio, edadLimpia, fotoLimpia, cantanteId], (err, result) => {
             if (err) {
-                console.error("Error al actualizar cantante:", err);
-                return res.status(500).json({ error: "Error al actualizar cantante" });
+                console.error('Error al actualizar cantante:', err);
+                return res.status(500).json({ exito: false, mensaje: 'Error al actualizar cantante' });
             }
-            res.json({ mensaje: "Cantante actualizado correctamente" });
+            
+            console.log('✅ Cantante actualizado exitosamente por usuario:', req.usuario.usuario);
+            res.json({
+                exito: true,
+                mensaje: 'Cantante actualizado exitosamente',
+                cantante: {
+                    id: cantanteId,
+                    nombre: nombreLimpio,
+                    apellido: apellidoLimpio,
+                    genero: generoLimpio,
+                    edad: edadLimpia,
+                    foto: fotoLimpia
+                }
+            });
         });
     });
 });
 
-app.post("/eliminarCantante", verificarToken, (req, res) => {
-    let { id } = req.body;
-    const usuarioId = req.usuario.id;
-    const isAdmin = req.usuario.esAdmin;
-
-    if (isAdmin) {
-        con.query("DELETE FROM cantantes WHERE id=?", [id], (err) => {
+// Eliminar cantante
+app.delete('/api/cantantes/:id', verificarToken, (req, res) => {
+    const cantanteId = parseInt(req.params.id);
+    
+    if (isNaN(cantanteId)) {
+        return res.status(400).json({ exito: false, mensaje: 'ID de cantante inválido' });
+    }
+    
+    // Verificar si el cantante existe y si el usuario tiene permisos
+    let verificarQuery = 'SELECT * FROM cantantes WHERE id = ?';
+    let verificarParams = [cantanteId];
+    
+    if (!req.usuario.esAdmin) {
+        verificarQuery += ' AND usuario_id = ?';
+        verificarParams.push(req.usuario.id);
+    }
+    
+    con.query(verificarQuery, verificarParams, (err, results) => {
+        if (err) {
+            console.error('Error al verificar cantante:', err);
+            return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+        }
+        
+        if (results.length === 0) {
+            return res.status(404).json({ exito: false, mensaje: 'Cantante no encontrado o no tiene permisos para eliminarlo' });
+        }
+        
+        const deleteQuery = 'DELETE FROM cantantes WHERE id = ?';
+        
+        con.query(deleteQuery, [cantanteId], (err, result) => {
             if (err) {
-                console.error("Error al eliminar cantante:", err);
-                return res.status(500).json({ error: "Error al eliminar cantante" });
+                console.error('Error al eliminar cantante:', err);
+                return res.status(500).json({ exito: false, mensaje: 'Error al eliminar cantante' });
             }
-            res.json({ mensaje: "Cantante eliminado correctamente" });
+            
+            console.log('✅ Cantante eliminado exitosamente por usuario:', req.usuario.usuario);
+            res.json({
+                exito: true,
+                mensaje: 'Cantante eliminado exitosamente'
+            });
         });
-    } else {
-        con.query("DELETE FROM cantantes WHERE id=? AND usuario_id=?", [id, usuarioId], (err, result) => {
+    });
+});
+
+// Obtener cantante por ID
+app.get('/api/cantantes/:id', verificarToken, (req, res) => {
+    const cantanteId = parseInt(req.params.id);
+    
+    if (isNaN(cantanteId)) {
+        return res.status(400).json({ exito: false, mensaje: 'ID de cantante inválido' });
+    }
+    
+    let query = `
+        SELECT c.*, u.nombre as nombre_usuario, u.usuario as username_usuario 
+        FROM cantantes c 
+        LEFT JOIN usuarios u ON c.usuario_id = u.id 
+        WHERE c.id = ?
+    `;
+    let params = [cantanteId];
+    
+    if (!req.usuario.esAdmin) {
+        query += ' AND c.usuario_id = ?';
+        params.push(req.usuario.id);
+    }
+    
+    con.query(query, params, (err, results) => {
+        if (err) {
+            console.error('Error al obtener cantante:', err);
+            return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
+        }
+        
+        if (results.length === 0) {
+            return res.status(404).json({ exito: false, mensaje: 'Cantante no encontrado' });
+        }
+        
+        res.json({ exito: true, cantante: results[0] });
+    });
+});
+
+// Estadísticas (solo para admin)
+app.get('/api/estadisticas', verificarToken, (req, res) => {
+    if (!req.usuario.esAdmin) {
+        return res.status(403).json({ exito: false, mensaje: 'Acceso denegado. Solo administradores' });
+    }
+    
+    const queries = {
+        totalUsuarios: 'SELECT COUNT(*) as total FROM usuarios',
+        totalCantantes: 'SELECT COUNT(*) as total FROM cantantes',
+        cantantesPorGenero: 'SELECT genero, COUNT(*) as cantidad FROM cantantes GROUP BY genero',
+        usuariosConCantantes: `
+            SELECT u.usuario, u.nombre, u.apellido, COUNT(c.id) as total_cantantes 
+            FROM usuarios u 
+            LEFT JOIN cantantes c ON u.id = c.usuario_id 
+            GROUP BY u.id, u.usuario, u.nombre, u.apellido
+            ORDER BY total_cantantes DESC
+        `
+    };
+    
+    const estadisticas = {};
+    let consultas_completadas = 0;
+    const total_consultas = Object.keys(queries).length;
+    
+    for (const [nombre, query] of Object.entries(queries)) {
+        con.query(query, (err, results) => {
             if (err) {
-                console.error("Error al eliminar cantante:", err);
-                return res.status(500).json({ error: "Error al eliminar cantante" });
+                console.error(`Error en consulta ${nombre}:`, err);
+                estadisticas[nombre] = { error: 'Error al obtener datos' };
+            } else {
+                estadisticas[nombre] = results;
             }
             
-            if (result.affectedRows === 0) {
-                return res.status(403).json({ error: "No tienes permiso para eliminar este cantante" });
+            consultas_completadas++;
+            if (consultas_completadas === total_consultas) {
+                res.json({ exito: true, estadisticas });
             }
-            
-            res.json({ mensaje: "Cantante eliminado correctamente" });
         });
     }
 });
 
-app.listen(3000, () => {
-    console.log("Servidor corriendo in the port: 3000");
+// Manejo de errores globales
+app.use((err, req, res, next) => {
+    console.error('Error no manejado:', err);
+    res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
+});
+
+// Iniciar servidor
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    console.log(`📱 Aplicación disponible en http://localhost:${PORT}`);
+    console.log('🔐 Características de seguridad activas:');
+    console.log('  - Cifrado AES frontend/backend');
+    console.log('  - Hash bcrypt para contraseñas');
+    console.log('  - JWT para autenticación');
+    console.log('  - Validación XSS y SQL Injection');
+    console.log('  - Control de acceso por usuarios');
 });
