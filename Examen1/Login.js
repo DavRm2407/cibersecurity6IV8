@@ -32,9 +32,9 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('🔐 Contraseña cifrada para envío');
             
             const datos = {
-                usuarioEmail: usuarioEmail,
-                contrasena: contrasenaCifrada, // Enviar la contraseña cifrada
-                esCifrada: true // Indicar al servidor que viene cifrada
+                usuario: usuarioEmail,        // ✅ CORREGIDO: cambié 'usuarioEmail' por 'usuario'
+                contrasena: contrasenaCifrada,
+                esCifrada: true
             };
             
             // Mostrar loading

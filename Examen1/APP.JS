@@ -6,17 +6,16 @@ const path = require('path');
 const xss = require("xss");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const crypto = require("crypto"); // Para AES en el servidor
+const crypto = require("crypto");
 const PORT = process.env.PORT || 3000;
 
 // CONFIGURACIÓN AES PARA EL SERVIDOR
-const AES_SECRET_KEY = 'MiClaveSecretaParaCifradoAES2024!'; // Debe coincidir con el frontend
+const AES_SECRET_KEY = 'MiClaveSecretaParaCifradoAES2024!';
 const AES_ALGORITHM = 'aes-256-cbc';
 
 // Funciones de cifrado AES para el servidor
 function descifrarAES(textoCifrado) {
     try {
-        // Para compatibilidad con CryptoJS del frontend
         const CryptoJS = require('crypto-js');
         const bytes = CryptoJS.AES.decrypt(textoCifrado, AES_SECRET_KEY);
         const textoOriginal = bytes.toString(CryptoJS.enc.Utf8);
@@ -134,6 +133,7 @@ con.connect(err => {
     }
     console.log("Connected a MySQL");
     
+    // ✅ CORREGIDO: Tabla usuarios con las columnas correctas
     const createTableQuery = `
     CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -142,7 +142,10 @@ con.connect(err => {
         usuario VARCHAR(50) UNIQUE NOT NULL,
         email VARCHAR(100) UNIQUE NOT NULL,
         contrasena VARCHAR(255) NOT NULL,
-        contrasena_aes TEXT, 
+        hash_bcrypt_inicio VARCHAR(255),
+        cifrado_aes_inicio TEXT,
+        longitud_hash INT DEFAULT 60,
+        longitud_cifrado INT,
         fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
  
@@ -150,8 +153,36 @@ con.connect(err => {
         if (err) {
             console.error('Error al crear la tabla usuarios:', err);
         } else {
-            console.log('Table usuarios ready baby');
+            console.log('✅ Tabla usuarios creada/verificada correctamente');
             
+            // Verificar si necesitamos añadir las nuevas columnas a usuarios existentes
+            con.query("SHOW COLUMNS FROM usuarios LIKE 'cifrado_aes_inicio'", (err, result) => {
+                if (err) {
+                    console.error('Error al verificar columnas:', err);
+                    return;
+                }
+                
+                if (result.length === 0) {
+                    console.log('📝 Añadiendo columnas de cifrado a tabla existente...');
+                    const alterQuery = `
+                        ALTER TABLE usuarios 
+                        ADD COLUMN hash_bcrypt_inicio VARCHAR(255),
+                        ADD COLUMN cifrado_aes_inicio TEXT,
+                        ADD COLUMN longitud_hash INT DEFAULT 60,
+                        ADD COLUMN longitud_cifrado INT
+                    `;
+                    
+                    con.query(alterQuery, (err, result) => {
+                        if (err) {
+                            console.error('Error al añadir columnas:', err);
+                        } else {
+                            console.log('✅ Columnas de cifrado añadidas correctamente');
+                        }
+                    });
+                }
+            });
+            
+            // Verificar columna usuario_id en cantantes
             con.query("SHOW COLUMNS FROM cantantes LIKE 'usuario_id'", (err, result) => {
                 if (err) {
                     console.error('Error al verificar columna usuario_id:', err);
@@ -166,12 +197,12 @@ con.connect(err => {
                         if (err) {
                             console.error('Error al añadir columna usuario_id:', err);
                         } else {
-                            console.log('Columna usuario_id añadida correctamente');
+                            console.log('✅ Columna usuario_id añadida correctamente');
                             addForeignKeyConstraint();
                         }
                     });
                 } else {
-                    console.log('The column usuario_id already exist honey');
+                    console.log('✅ La columna usuario_id ya existe');
                     addForeignKeyConstraint();
                 }
             });
@@ -198,11 +229,11 @@ con.connect(err => {
                     if (err) {
                         console.error('Error al añadir restricción:', err);
                     } else {
-                        console.log('Restricción de clave foránea añadida');
+                        console.log('✅ Restricción de clave foránea añadida');
                     }
                 });
             } else {
-                console.log('La restricción already exist mon amour');
+                console.log('✅ La restricción de clave foránea ya existe');
             }
         });
     }
@@ -234,7 +265,7 @@ function verificarToken(req, res, next) {
     }
 }
 
-// REGISTRO MODIFICADO PARA MANEJAR AES
+// ✅ REGISTRO CORREGIDO CON COLUMNAS ACTUALIZADAS
 app.post('/api/registro', async (req, res) => {
     const { nombre, apellido, usuario, email, contrasena, esCifrada } = req.body;
     
@@ -281,20 +312,36 @@ app.post('/api/registro', async (req, res) => {
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(contrasenaParaProcesar, salt);
             
-            // Guardar también la versión AES para compatibilidad futura
+            // Guardar también la versión AES
             const contrasenaAES = cifrarAES(contrasenaParaProcesar);
             
-// Continuación del código desde donde se cortó...
-
-            const insertQuery = 'INSERT INTO usuarios (nombre, apellido, usuario, email, contrasena, contrasena_aes) VALUES (?, ?, ?, ?, ?, ?)';
+            // ✅ CORREGIDO: Usar las columnas correctas
+            const insertQuery = `
+                INSERT INTO usuarios (
+                    nombre, apellido, usuario, email, contrasena, 
+                    hash_bcrypt_inicio, cifrado_aes_inicio, longitud_hash, longitud_cifrado
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
             
-            con.query(insertQuery, [nombreLimpio, apellidoLimpio, usuarioLimpio, emailLimpio, hashedPassword, contrasenaAES], (err, result) => {
+            const valores = [
+                nombreLimpio, 
+                apellidoLimpio, 
+                usuarioLimpio, 
+                emailLimpio, 
+                hashedPassword,
+                hashedPassword.substring(0, 50), // Primeros 50 chars del hash bcrypt
+                contrasenaAES,
+                hashedPassword.length,
+                contrasenaAES.length
+            ];
+            
+            con.query(insertQuery, valores, (err, result) => {
                 if (err) {
                     console.error('Error al insertar usuario:', err);
                     return res.status(500).json({ exito: false, mensaje: 'Error al registrar usuario' });
                 }
                 
-                console.log('✅ Usuario registrado exitosamente');
+                console.log('✅ Usuario registrado exitosamente con cifrado AES');
                 res.status(201).json({ 
                     exito: true, 
                     mensaje: 'Usuario registrado exitosamente',
@@ -314,7 +361,7 @@ app.post('/api/registro', async (req, res) => {
     }
 });
 
-// LOGIN MODIFICADO PARA MANEJAR AES
+// ✅ LOGIN CORREGIDO
 app.post('/api/login', async (req, res) => {
     const { usuario, contrasena, esCifrada } = req.body;
     
@@ -421,7 +468,6 @@ app.get('/api/cantantes', verificarToken, (req, res) => {
         LEFT JOIN usuarios u ON c.usuario_id = u.id
     `;
     
-    // Si no es admin, solo mostrar sus propios cantantes
     if (!req.usuario.esAdmin) {
         query += ` WHERE c.usuario_id = ?`;
         con.query(query, [req.usuario.id], (err, results) => {
@@ -510,7 +556,6 @@ app.put('/api/cantantes/:id', verificarToken, (req, res) => {
         return res.status(400).json({ exito: false, mensaje: validacion.mensaje });
     }
     
-    // Verificar si el cantante existe y si el usuario tiene permisos
     let verificarQuery = 'SELECT * FROM cantantes WHERE id = ?';
     let verificarParams = [cantanteId];
     
@@ -564,7 +609,7 @@ app.put('/api/cantantes/:id', verificarToken, (req, res) => {
     });
 });
 
-// Eliminar cantante
+// ✅ ELIMINAR CANTANTE - CÓDIGO COMPLETADO
 app.delete('/api/cantantes/:id', verificarToken, (req, res) => {
     const cantanteId = parseInt(req.params.id);
     
@@ -572,7 +617,6 @@ app.delete('/api/cantantes/:id', verificarToken, (req, res) => {
         return res.status(400).json({ exito: false, mensaje: 'ID de cantante inválido' });
     }
     
-    // Verificar si el cantante existe y si el usuario tiene permisos
     let verificarQuery = 'SELECT * FROM cantantes WHERE id = ?';
     let verificarParams = [cantanteId];
     
@@ -608,95 +652,133 @@ app.delete('/api/cantantes/:id', verificarToken, (req, res) => {
     });
 });
 
-// Obtener cantante por ID
-app.get('/api/cantantes/:id', verificarToken, (req, res) => {
-    const cantanteId = parseInt(req.params.id);
-    
-    if (isNaN(cantanteId)) {
-        return res.status(400).json({ exito: false, mensaje: 'ID de cantante inválido' });
-    }
-    
-    let query = `
-        SELECT c.*, u.nombre as nombre_usuario, u.usuario as username_usuario 
-        FROM cantantes c 
-        LEFT JOIN usuarios u ON c.usuario_id = u.id 
-        WHERE c.id = ?
-    `;
-    let params = [cantanteId];
-    
+// ✅ ENDPOINTS ADICIONALES PARA ADMINISTRACIÓN
+
+// Obtener todos los usuarios (solo admin)
+app.get('/api/usuarios', verificarToken, (req, res) => {
     if (!req.usuario.esAdmin) {
-        query += ' AND c.usuario_id = ?';
-        params.push(req.usuario.id);
+        return res.status(403).json({ exito: false, mensaje: 'No tiene permisos de administrador' });
     }
     
-    con.query(query, params, (err, results) => {
+    const query = `
+        SELECT id, nombre, apellido, usuario, email, fecha_registro,
+               longitud_hash, longitud_cifrado
+        FROM usuarios 
+        ORDER BY fecha_registro DESC
+    `;
+    
+    con.query(query, (err, results) => {
         if (err) {
-            console.error('Error al obtener cantante:', err);
+            console.error('Error al obtener usuarios:', err);
             return res.status(500).json({ exito: false, mensaje: 'Error del servidor' });
         }
         
-        if (results.length === 0) {
-            return res.status(404).json({ exito: false, mensaje: 'Cantante no encontrado' });
-        }
-        
-        res.json({ exito: true, cantante: results[0] });
+        res.json({ exito: true, usuarios: results });
     });
 });
 
-// Estadísticas (solo para admin)
+// Obtener estadísticas del sistema (solo admin)
 app.get('/api/estadisticas', verificarToken, (req, res) => {
     if (!req.usuario.esAdmin) {
-        return res.status(403).json({ exito: false, mensaje: 'Acceso denegado. Solo administradores' });
+        return res.status(403).json({ exito: false, mensaje: 'No tiene permisos de administrador' });
     }
     
-    const queries = {
-        totalUsuarios: 'SELECT COUNT(*) as total FROM usuarios',
-        totalCantantes: 'SELECT COUNT(*) as total FROM cantantes',
-        cantantesPorGenero: 'SELECT genero, COUNT(*) as cantidad FROM cantantes GROUP BY genero',
-        usuariosConCantantes: `
-            SELECT u.usuario, u.nombre, u.apellido, COUNT(c.id) as total_cantantes 
-            FROM usuarios u 
-            LEFT JOIN cantantes c ON u.id = c.usuario_id 
-            GROUP BY u.id, u.usuario, u.nombre, u.apellido
-            ORDER BY total_cantantes DESC
-        `
-    };
+    const promises = [
+        new Promise((resolve, reject) => {
+            con.query('SELECT COUNT(*) as total FROM usuarios', (err, result) => {
+                if (err) reject(err);
+                else resolve({ totalUsuarios: result[0].total });
+            });
+        }),
+        new Promise((resolve, reject) => {
+            con.query('SELECT COUNT(*) as total FROM cantantes', (err, result) => {
+                if (err) reject(err);
+                else resolve({ totalCantantes: result[0].total });
+            });
+        }),
+        new Promise((resolve, reject) => {
+            con.query(`
+                SELECT u.usuario, COUNT(c.id) as cantantes_count 
+                FROM usuarios u 
+                LEFT JOIN cantantes c ON u.id = c.usuario_id 
+                GROUP BY u.id, u.usuario 
+                ORDER BY cantantes_count DESC
+            `, (err, result) => {
+                if (err) reject(err);
+                else resolve({ usuariosCantantes: result });
+            });
+        })
+    ];
     
-    const estadisticas = {};
-    let consultas_completadas = 0;
-    const total_consultas = Object.keys(queries).length;
-    
-    for (const [nombre, query] of Object.entries(queries)) {
-        con.query(query, (err, results) => {
-            if (err) {
-                console.error(`Error en consulta ${nombre}:`, err);
-                estadisticas[nombre] = { error: 'Error al obtener datos' };
-            } else {
-                estadisticas[nombre] = results;
-            }
-            
-            consultas_completadas++;
-            if (consultas_completadas === total_consultas) {
-                res.json({ exito: true, estadisticas });
-            }
+    Promise.all(promises)
+        .then(resultados => {
+            const estadisticas = Object.assign({}, ...resultados);
+            res.json({ exito: true, estadisticas });
+        })
+        .catch(error => {
+            console.error('Error al obtener estadísticas:', error);
+            res.status(500).json({ exito: false, mensaje: 'Error al obtener estadísticas' });
         });
+});
+
+// ✅ ENDPOINT PARA PROBAR CIFRADO AES
+app.post('/api/probar-cifrado', (req, res) => {
+    const { texto } = req.body;
+    
+    if (!texto) {
+        return res.status(400).json({ exito: false, mensaje: 'Se requiere un texto para cifrar' });
+    }
+    
+    try {
+        const textoCifrado = cifrarAES(texto);
+        const textoDescifrado = descifrarAES(textoCifrado);
+        
+        res.json({
+            exito: true,
+            textoOriginal: texto,
+            textoCifrado: textoCifrado,
+            textoDescifrado: textoDescifrado,
+            longitudOriginal: texto.length,
+            longitudCifrado: textoCifrado.length,
+            cifradoExitoso: texto === textoDescifrado
+        });
+    } catch (error) {
+        console.error('Error en prueba de cifrado:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error en el proceso de cifrado' });
     }
 });
 
-// Manejo de errores globales
+// ✅ MANEJO DE ERRORES GLOBALES
 app.use((err, req, res, next) => {
     console.error('Error no manejado:', err);
     res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
 });
 
-// Iniciar servidor
+// ✅ INICIAR SERVIDOR
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-    console.log(`📱 Aplicación disponible en http://localhost:${PORT}`);
-    console.log('🔐 Características de seguridad activas:');
-    console.log('  - Cifrado AES frontend/backend');
-    console.log('  - Hash bcrypt para contraseñas');
-    console.log('  - JWT para autenticación');
-    console.log('  - Validación XSS y SQL Injection');
-    console.log('  - Control de acceso por usuarios');
+    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+    console.log(`🔐 Cifrado AES configurado correctamente`);
+    console.log(`📊 Endpoints disponibles:`);
+    console.log(`   - POST /api/registro (con cifrado AES)`);
+    console.log(`   - POST /api/login (con cifrado AES)`);
+    console.log(`   - GET  /api/verificar-token`);
+    console.log(`   - GET  /api/cantantes`);
+    console.log(`   - POST /api/cantantes`);
+    console.log(`   - PUT  /api/cantantes/:id`);
+    console.log(`   - DELETE /api/cantantes/:id`);
+    console.log(`   - GET  /api/usuarios (admin only)`);
+    console.log(`   - GET  /api/estadisticas (admin only)`);
+    console.log(`   - POST /api/probar-cifrado`);
+    console.log(`🔑 Clave AES: ${AES_SECRET_KEY.substring(0, 10)}...`);
+    console.log(`💾 Base de datos: cantantes_db`);
 });
+
+// ✅ EXPORTAR FUNCIONES PARA TESTING (opcional)
+module.exports = {
+    app,
+    cifrarAES,
+    descifrarAES,
+    limpiarTexto,
+    validarEntrada,
+    validarCamposMultiples
+};
